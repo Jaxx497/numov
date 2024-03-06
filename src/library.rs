@@ -66,7 +66,7 @@ impl<'a> Library<'a> {
                 .expect("Could not convert to timestamp.")
                 .as_nanos();
 
-            let mash = bytes as usize + last_mod as usize;
+            let mash = bytes as u128 + last_mod;
             let hash = xxh32(&mash.to_be_bytes(), 0);
 
             // If the hash of the file we're reading
@@ -84,7 +84,7 @@ impl<'a> Library<'a> {
                         self.new.push(mov);
                     }
                     Err(err) if err.to_string().contains("UNIQUE constraint failed") => {
-                        println!("Already exists: {:x}", mov.hash)
+                        self.existing.remove(&hash);
                     }
                     Err(err) => eprintln!("{:?}", err),
                 }

@@ -1,4 +1,5 @@
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
+use rusqlite::Result;
 
 #[derive(Debug)]
 pub struct Database {
@@ -14,9 +15,18 @@ impl Database {
                         title TEXT NOT NULL,
                         hash INTEGER NOT NULL UNIQUE, 
                         size REAL NOT NULL
-                        )",
+                    )",
             [],
         )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ratings(
+                        title TEXT PRIMARY KEY,
+                        rating TEXT NOT NULL
+                    )",
+            [],
+        )?;
+
         Ok(Database { conn })
     }
 }

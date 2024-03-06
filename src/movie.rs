@@ -5,6 +5,7 @@ use xxhash_rust::const_xxh32::xxh32;
 #[derive(Debug)]
 pub struct Movie {
     pub title: PathBuf,
+    // pub year: i32,
     pub hash: usize,
     pub size: f32,
 }
@@ -42,10 +43,7 @@ impl Movie {
             .expect("Could not convert to timestamp.")
             .as_nanos();
 
-        let mash = bytes as usize + last_mod as usize;
-
-        let hash = xxh32(&mash.to_be_bytes(), 0);
-        // let hash = bytes;
+        let hash = xxh32(&(bytes as u128 + last_mod).to_be_bytes(), 0);
 
         (readable, hash as usize)
     }
