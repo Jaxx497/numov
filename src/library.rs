@@ -2,7 +2,6 @@
 use rusqlite::Result;
 use std::{collections::HashSet, path::PathBuf};
 use walkdir::WalkDir;
-use xxhash_rust::const_xxh32::xxh32;
 
 use crate::{database::Database, movie::Movie};
 
@@ -10,9 +9,9 @@ use crate::{database::Database, movie::Movie};
 pub struct Library<'a> {
     db: &'a Database,
     root: String,
-    pub new: Vec<Movie>,
-    pub collection: Vec<Movie>,
+    pub new: Vec<String>,
     pub existing: HashSet<u32>,
+    pub collection: Vec<Movie>,
 }
 
 impl<'a> Library<'a> {
@@ -27,70 +26,64 @@ impl<'a> Library<'a> {
         }
     }
 
-    // pub fn get_existing_ye(&mut self) {
-    //     self.existing = self
-    //         .db
-    //         .conn
-    //         .prepare("SELECT hash FROM movies")
-    //         .expect("Failed on SELECT statement")
-    //         .query_map([], |row| row.get(0))
-    //         .expect("Failed to read rows")
-    //         .collect::<Result<_>>()
-    //         .expect("Failed to create hashmap");
-    // }
-
     pub fn get_existing(db: &'a Database) -> HashSet<u32> {
         db.conn
             .prepare("SELECT hash FROM movies")
             .expect("Failed on SELECT statement")
             .query_map([], |row| row.get(0))
             .expect("Failed to read rows")
-            .collect::<Result<_>>()
-            .expect("Failed to create hashmap")
+            .collect::<Result<HashSet<u32>>>()
+            .expect("Failed to create hashmap of existing values!")
     }
 
     pub fn build(&mut self) -> Result<()> {
+        // ROADMAP FOR THIS FUNCTION
+        // 1. Add any new additions to the database
+        // 2. Remove all updated or deleted files
+        // 3. Create `collection`
+
         // let path_list = Self::_get_dirs(&self.root)[20..25].to_vec();
         let path_list = Self::_get_dirs(&self.root);
 
         self.db.conn.execute("BEGIN TRANSACTION", [])?;
 
         for path in path_list {
-            let bytes = path.metadata().unwrap().len();
-            let last_mod = path
-                .metadata()
-                .unwrap()
-                .modified()
-                .unwrap()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Could not convert to timestamp.")
-                .as_nanos();
+            let (_, hash) = numov::read_metadata(&path);
 
-            let mash = bytes as u128 + last_mod;
-            let hash = xxh32(&mash.to_be_bytes(), 0);
-
-            // If the hash of the file we're reading
-            // is NOT in the existing known hashes
             if !self.existing.contains(&hash) {
-                // Create a movie obj
-                let mov = Movie::new(path);
+                let mov = Movie::new(&path);
 
-                // Add that movie to the database
                 match self.db.conn.execute(
-                    "INSERT INTO movies (title, hash, size) VALUES (?, ?, ?)",
-                    (&mov.title.to_string_lossy(), &mov.hash, &mov.size),
+                    "INSERT INTO movies (title, year, hash, size) VALUES (?, ?, ?, ?)",
+                    (&mov.title, &mov.year, &mov.hash, &mov.size),
                 ) {
                     Ok(_) => {
-                        self.new.push(mov);
-                    }
-                    Err(err) if err.to_string().contains("UNIQUE constraint failed") => {
-                        self.existing.remove(&hash);
+                        self.new.push(format!("{} ({})", mov.title, mov.year));
+                        self.collection.push(mov);
                     }
                     Err(err) => eprintln!("{:?}", err),
+                    // Err(err) if err.to_string().contains("UNIQUE constraint failed") => {
+                    //     self.existing.remove(&hash);
+                    // }
                 }
-            } else {
-                self.existing.remove(&hash);
             }
+            // else {
+            //     if let Ok(movie) =
+            //         self.db
+            //             .conn
+            //             .query_row("SELECT * FROM movies WHERE hash=(?)", [hash], |row| {
+            //                 Ok(Movie {
+            //                     title: row.get(0)?,
+            //                     year: row.get(1)?,
+            //                     hash: row.get(2)?,
+            //                     size: row.get(3)?,
+            //                 })
+            //             })
+            //     {
+            //         self.collection.push(movie);
+            //     }
+            //     self.existing.remove(&hash);
+            // }
         }
         self.db.conn.execute("COMMIT", []).unwrap();
         Ok(())

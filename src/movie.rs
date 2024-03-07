@@ -1,51 +1,53 @@
+use matroska::{self, Matroska};
+use regex::Regex;
 use std::fmt::{Display, Formatter, Result};
 use std::path::PathBuf;
-use xxhash_rust::const_xxh32::xxh32;
 
 #[derive(Debug)]
 pub struct Movie {
-    pub title: PathBuf,
-    // pub year: i32,
-    pub hash: usize,
+    pub title: String,
+    pub year: i16,
+    pub hash: u32,
     pub size: f32,
 }
 
 impl Movie {
-    pub fn new(path: PathBuf) -> Self {
-        let (size, hash) = Self::_get_size_hash(&path);
+    pub fn new(path: &PathBuf) -> Self {
+        let (byte_count, hash) = numov::read_metadata(path);
+        let matroska = Matroska::open(std::fs::File::open(path).unwrap()).unwrap();
+
+        let (title, year) = match &matroska.info.title {
+            Some(t) if Regex::new(r".*\(\d{4}\)$").unwrap().is_match(t) => {
+                Self::unwrap_title_year(t)
+            }
+            // _ => _set_title_year(path),
+            _ => (String::from("TITLE"), 2000),
+        };
 
         Movie {
-            title: path,
+            title,
+            year,
             hash,
-            size,
+            size: numov::make_gb(byte_count),
         }
     }
 
-    fn _get_size_hash(path: &PathBuf) -> (f32, usize) {
-        let bytes = std::fs::metadata(path)
-            .expect("Could not read file's metadata.")
-            .len();
+    fn unwrap_title_year(parent: &str) -> (String, i16) {
+        let title = Self::extract_match(parent, r"^(.*?) \(").unwrap();
 
-        let readable =
-            ["B", "KB", "MB", "GB"]
-                .iter()
-                .fold(bytes as f32, |acc, _| match acc > 1024.0 {
-                    true => acc / 1024.0,
-                    false => acc,
-                });
-
-        let last_mod = path
-            .metadata()
+        let year = Self::extract_match(parent, r"\((.*?)\)")
             .unwrap()
-            .modified()
-            .unwrap()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("Could not convert to timestamp.")
-            .as_nanos();
+            .parse::<i16>()
+            .expect("Year could not be parsed.");
 
-        let hash = xxh32(&(bytes as u128 + last_mod).to_be_bytes(), 0);
+        (title, year)
+    }
 
-        (readable, hash as usize)
+    fn extract_match(text: &str, pattern: &str) -> Option<String> {
+        let regex = Regex::new(pattern).unwrap();
+        regex
+            .captures(text)
+            .and_then(|capture| capture.get(1).map(|m| m.as_str().to_string()))
     }
 }
 

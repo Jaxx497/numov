@@ -13,6 +13,7 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS movies(
                         title TEXT NOT NULL,
+                        year INTEGER NOT NULL,
                         hash INTEGER NOT NULL UNIQUE, 
                         size REAL NOT NULL
                     )",
