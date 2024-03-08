@@ -89,7 +89,7 @@ impl<'a> Library<'a> {
         Ok(())
     }
 
-    fn _get_dirs(root: &str) -> Vec<PathBuf> {
+    pub fn _get_dirs(root: &str) -> Vec<PathBuf> {
         WalkDir::new(root)
             .max_depth(2)
             .into_iter()

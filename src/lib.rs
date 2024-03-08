@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::path::Path;
 use xxhash_rust::const_xxh32::xxh32;
 
 /// Given a path, will return a tuple of BYTE COUNT `(u64)` and HASH `(u32)`
-pub fn read_metadata(path: &PathBuf) -> (u64, u32) {
+pub fn read_metadata(path: &Path) -> (u64, u32) {
     let bytes = std::fs::metadata(path)
         .expect("Could not read files metadata.")
         .len();

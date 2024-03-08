@@ -1,53 +1,83 @@
+use lazy_static::lazy_static;
 use matroska::{self, Matroska};
 use regex::Regex;
 use std::fmt::{Display, Formatter, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Movie {
     pub title: String,
     pub year: i16,
+    pub duration: String,
     pub hash: u32,
     pub size: f32,
 }
 
 impl Movie {
     pub fn new(path: &PathBuf) -> Self {
-        let (byte_count, hash) = numov::read_metadata(path);
         let matroska = Matroska::open(std::fs::File::open(path).unwrap()).unwrap();
 
-        let (title, year) = match &matroska.info.title {
-            Some(t) if Regex::new(r".*\(\d{4}\)$").unwrap().is_match(t) => {
-                Self::unwrap_title_year(t)
-            }
-            // _ => _set_title_year(path),
-            _ => (String::from("TITLE"), 2000),
-        };
+        Self::collection(&matroska, path)
+    }
+
+    fn collection(matroska: &Matroska, path: &Path) -> Self {
+        let (title, year) = Self::get_title_year(matroska, path).unwrap();
+
+        let (byte_count, hash) = numov::read_metadata(path);
+
+        let duration_raw = &matroska.info.duration.unwrap();
+        let hours = duration_raw.as_secs() / 3600;
+        let minutes = (duration_raw.as_secs() % 3600) / 60;
+
+        let duration = format!("{}h {:02}min", hours, minutes);
+
+        let size = numov::make_gb(byte_count);
 
         Movie {
             title,
             year,
+            duration,
             hash,
-            size: numov::make_gb(byte_count),
+            size,
         }
     }
 
-    fn unwrap_title_year(parent: &str) -> (String, i16) {
-        let title = Self::extract_match(parent, r"^(.*?) \(").unwrap();
+    fn get_title_year(matroska: &Matroska, path: &Path) -> Option<(String, i16)> {
+        let metadata_title = matroska.info.title.clone().unwrap_or_default();
 
-        let year = Self::extract_match(parent, r"\((.*?)\)")
-            .unwrap()
-            .parse::<i16>()
-            .expect("Year could not be parsed.");
+        let parent = path
+            .parent()
+            .expect("Could not unwrap parent contents.")
+            .file_name()
+            .expect("Could not read parent folder name.")
+            .to_str()?;
 
-        (title, year)
+        Self::extract(&metadata_title)
+            .or_else(|| {
+                Self::extract(parent).map(|(title, year)| {
+                    println!("TODO UPDATE METADATA FOR {}", title);
+                    (title, year)
+                })
+            })
+            .or_else(|| {
+                println!(
+                    "UNABLE TO PARSE TITLE INFO FOR {{ {:?} }}",
+                    &path.file_name().unwrap()
+                );
+                None
+            })
     }
 
-    fn extract_match(text: &str, pattern: &str) -> Option<String> {
-        let regex = Regex::new(pattern).unwrap();
-        regex
-            .captures(text)
-            .and_then(|capture| capture.get(1).map(|m| m.as_str().to_string()))
+    fn extract(str: &str) -> Option<(String, i16)> {
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r"(?P<title>.*) \((?P<year>\d{4})\)").unwrap();
+        }
+
+        RE.captures(str).map(|captures| {
+            let title = captures.get(1).unwrap().as_str().to_string();
+            let year: i16 = captures.get(2).unwrap().as_str().parse().unwrap();
+            (title, year)
+        })
     }
 }
 
@@ -55,8 +85,8 @@ impl Display for Movie {
     fn fmt(&self, f: &mut Formatter) -> Result {
         write!(
             f,
-            "Title: {:?}\nSize: {:.2} GB\nHash: {:x}\n",
-            self.title, self.size, self.hash
+            "{0} ({1}) [{4:x}]\n\t {3} | {2:.2} GB\n",
+            self.title, self.year, self.size, self.duration, self.hash
         )
     }
 }
