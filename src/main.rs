@@ -14,15 +14,17 @@ use ratings::Ratings;
 use std::time::Instant;
 
 fn main() {
-    let dirs = &Library::_get_dirs("M:/")[22];
-
-    // for dir in dirs {
-    //     Movie::new(dir);
-    // }
+    let t1 = Instant::now();
+    let dirs = &Library::_get_dirs("M:/");
     //
-    let file = File::open(&dirs).unwrap();
-    let mat = Matroska::open(&file);
-    println!("{:#?}", mat);
+    for dir in dirs {
+        let m = Movie::new(dir);
+        println!("{:?}", m);
+    }
+    // let file = File::open(&dirs[210]).unwrap();
+    // let mat = Matroska::open(&file).unwrap();
+    // println!("{:#?}", mat);
+    println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }
 
 fn mainz() {

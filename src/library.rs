@@ -54,8 +54,21 @@ impl<'a> Library<'a> {
                 let mov = Movie::new(&path);
 
                 match self.db.conn.execute(
-                    "INSERT INTO movies (title, year, hash, size) VALUES (?, ?, ?, ?)",
-                    (&mov.title, &mov.year, &mov.hash, &mov.size),
+                    "INSERT INTO movies (title, year, size, duration, resolution, v_codec, bit_depth, a_codec, channels, a_count, sub_format, sub_count, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )",
+                    (&mov.title,
+                        &mov.year,
+                        &mov.size,
+                        &mov.duration,
+                        &mov.video.resolution,
+                        &mov.video.codec,
+                        &mov.video.bit_depth,
+                        &mov.audio.codec,
+                        &mov.audio.channels,
+                        &mov.audio.count,
+                        &mov.subs.format,
+                        &mov.subs.count,
+                        &mov.hash,
+                    ),
                 ) {
                     Ok(_) => {
                         self.new.push(format!("{} ({})", mov.title, mov.year));
@@ -67,23 +80,6 @@ impl<'a> Library<'a> {
                     // }
                 }
             }
-            // else {
-            //     if let Ok(movie) =
-            //         self.db
-            //             .conn
-            //             .query_row("SELECT * FROM movies WHERE hash=(?)", [hash], |row| {
-            //                 Ok(Movie {
-            //                     title: row.get(0)?,
-            //                     year: row.get(1)?,
-            //                     hash: row.get(2)?,
-            //                     size: row.get(3)?,
-            //                 })
-            //             })
-            //     {
-            //         self.collection.push(movie);
-            //     }
-            //     self.existing.remove(&hash);
-            // }
         }
         self.db.conn.execute("COMMIT", []).unwrap();
         Ok(())
