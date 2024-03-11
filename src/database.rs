@@ -14,17 +14,17 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS movies(
                         title TEXT NOT NULL,
                         year INTEGER NOT NULL,
-                        size REAL NOT NULL
+                        size REAL NOT NULL,
                         duration TEXT NOT NULL,
                         resolution TEXT NOT NULL,
-                        v_codec TEXT NOT NULL UNIQUE, 
-                        bit_depth INTEGER NOT NULL
-                        a_codec TEXT NOT NULL UNIQUE, 
-                        channels REAL NOT NULL
-                        a_count INTEGER NOT NULL
-                        sub_format TEXT NOT NULL
-                        sub_count INTEGER NOT NULL
-                        hash INTEGER NOT NULL UNIQUE, 
+                        v_codec TEXT NOT NULL, 
+                        bit_depth TEXT NOT NULL,
+                        a_codec TEXT NOT NULL, 
+                        channels NUMERIC NOT NULL,
+                        a_count INTEGER NOT NULL,
+                        sub_format TEXT NOT NULL,
+                        sub_count INTEGER NOT NULL,
+                        hash INTEGER NOT NULL UNIQUE 
                     )",
             [],
         )?;

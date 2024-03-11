@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use rusqlite::Result;
+use rusqlite::{Result, ToSql};
 use std::{collections::HashSet, path::PathBuf};
 use walkdir::WalkDir;
 
@@ -42,8 +42,8 @@ impl<'a> Library<'a> {
         // 2. Remove all updated or deleted files
         // 3. Create `collection`
 
-        // let path_list = Self::_get_dirs(&self.root)[20..25].to_vec();
-        let path_list = Self::_get_dirs(&self.root);
+        let path_list = Self::_get_dirs(&self.root)[20..25].to_vec();
+        // let path_list = Self::_get_dirs(&self.root);
 
         self.db.conn.execute("BEGIN TRANSACTION", [])?;
 
@@ -57,13 +57,13 @@ impl<'a> Library<'a> {
                     "INSERT INTO movies (title, year, size, duration, resolution, v_codec, bit_depth, a_codec, channels, a_count, sub_format, sub_count, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )",
                     (&mov.title,
                         &mov.year,
-                        &mov.size,
+                        format!("{:.2}", &mov.size),
                         &mov.duration,
                         &mov.video.resolution,
                         &mov.video.codec,
                         &mov.video.bit_depth,
                         &mov.audio.codec,
-                        &mov.audio.channels,
+                        &mov.audio.channels.to_string(),
                         &mov.audio.count,
                         &mov.subs.format,
                         &mov.subs.count,

@@ -13,9 +13,9 @@ use movie::Movie;
 use ratings::Ratings;
 use std::time::Instant;
 
-fn main() {
+fn maing() {
     let t1 = Instant::now();
-    let dirs = &Library::_get_dirs("M:/");
+    let dirs = &Library::_get_dirs("M:/")[10..15];
     //
     for dir in dirs {
         let m = Movie::new(dir);
@@ -27,7 +27,7 @@ fn main() {
     println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }
 
-fn mainz() {
+fn main() {
     let t1 = Instant::now();
     let db = match Database::new() {
         Ok(x) => x,

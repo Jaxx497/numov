@@ -19,7 +19,7 @@ lazy_static! {
 pub struct VideoStream {
     pub resolution: Resolution,
     pub codec: VideoCodec,
-    pub bit_depth: usize,
+    pub bit_depth: VideoBits,
 }
 
 #[derive(Debug)]
@@ -56,7 +56,7 @@ impl Movie {
 
     fn collection(matroska: &Matroska, path: &Path) -> Self {
         let (title, year) = Self::get_title_year(matroska, path).unwrap();
-        println!("{}", title);
+        // println!("{}", title);
 
         let (byte_count, hash) = numov::read_metadata(path);
         let duration = Self::readable_duration(&matroska.info.duration.unwrap());
@@ -127,7 +127,7 @@ impl Movie {
         let mut video_info = VideoStream {
             resolution: Resolution::SD,
             codec: VideoCodec::from("None"),
-            bit_depth: 0,
+            bit_depth: VideoBits::Other(0),
         };
         match track.tracktype {
             Tracktype::Video => {
@@ -136,10 +136,10 @@ impl Movie {
                 }
                 video_info.codec = VideoCodec::from(track.codec_id.as_str());
                 video_info.bit_depth = match video_info.codec {
-                    VideoCodec::x265 => 10,
-                    VideoCodec::x264 => 8,
-                    VideoCodec::Other(ref s) if s == "VP9" => 10,
-                    _ => 0,
+                    VideoCodec::x265 => VideoBits::Bit10,
+                    VideoCodec::x264 => VideoBits::Bit8,
+                    VideoCodec::Other(ref s) if s == "VP9" => VideoBits::Bit10,
+                    _ => VideoBits::Other(0),
                 };
             }
             _ => panic!(
@@ -192,7 +192,7 @@ impl Movie {
             4 => 4.0,
             6 => 5.1,
             7 => 6.1,
-            8 => 8.1,
+            8 => 7.1,
             _ => 0.0,
         }
     }
@@ -220,7 +220,7 @@ impl Display for Movie {
 }
 
 #[derive(Debug, Default)]
-enum Resolution {
+pub enum Resolution {
     SD,
     HD720,
     HD1080,
@@ -242,23 +242,40 @@ impl From<u64> for Resolution {
     }
 }
 
-impl fmt::Display for Resolution {
+impl Display for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
+        match self {
             Resolution::SD => write!(f, "SD"),
             Resolution::HD720 => write!(f, "720p"),
             Resolution::HD1080 => write!(f, "1080p"),
             Resolution::UHD4K => write!(f, "4K"),
-            _ => write!(f, "8K"),
+            Resolution::UHD8K => write!(f, "8K"),
+            Resolution::Err => write!(f, "Err"),
         }
     }
 }
 
+impl ToSql for Resolution {
+    fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(self.to_string().into()) // Leverage Display implementation for conversion
+    }
+}
+
 #[derive(Debug)]
-enum VideoBits {
+pub enum VideoBits {
     Bit10,
     Bit8,
     Other(i8),
+}
+
+impl ToSql for VideoBits {
+    fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(match self {
+            VideoBits::Bit10 => "10bit".into(),
+            VideoBits::Bit8 => "8bit".into(),
+            VideoBits::Other(s) => format!("{}bit", s).into(),
+        })
+    }
 }
 
 impl fmt::Display for VideoBits {
@@ -283,7 +300,7 @@ impl From<&i8> for VideoBits {
 
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
-enum VideoCodec {
+pub enum VideoCodec {
     x264,
     x265,
     Other(String),
@@ -311,9 +328,9 @@ impl From<&str> for VideoCodec {
 impl ToSql for VideoCodec {
     fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
         Ok(match self {
-            VideoCodec::x265 => rusqlite::types::ToSqlOutput::from("x265"),
-            VideoCodec::x264 => rusqlite::types::ToSqlOutput::from("x264"),
-            VideoCodec::Other(s) => rusqlite::types::ToSqlOutput::from(s.as_str()),
+            VideoCodec::x265 => "x265".into(),
+            VideoCodec::x264 => "x264".into(),
+            VideoCodec::Other(s) => s.as_str().into(),
         })
     }
 }
@@ -329,7 +346,7 @@ impl fmt::Display for VideoCodec {
 
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
-enum AudioCodec {
+pub enum AudioCodec {
     AAC,
     AC3,
     Atmos, // same as TrueHD
@@ -363,6 +380,22 @@ impl From<&str> for AudioCodec {
         }
     }
 }
+
+impl ToSql for AudioCodec {
+    fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(match self {
+            AudioCodec::AAC => "AAC".into(),
+            AudioCodec::AC3 => "AC3".into(),
+            AudioCodec::DTS => "DTS".into(),
+            AudioCodec::EAC3 => "EAC3".into(),
+            AudioCodec::FLAC => "FLAC".into(),
+            AudioCodec::OPUS => "OPUS".into(),
+            AudioCodec::Atmos => "Atmos".into(),
+            AudioCodec::Other(s) => s.as_str().into(),
+        })
+    }
+}
+
 impl fmt::Display for AudioCodec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -374,7 +407,7 @@ impl fmt::Display for AudioCodec {
 
 #[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
-enum SubtitleFormat {
+pub enum SubtitleFormat {
     ASS,
     PGS,
     SRT,
@@ -402,6 +435,19 @@ impl From<&str> for SubtitleFormat {
                 SubtitleFormat::Other(other.to_string())
             }
         }
+    }
+}
+
+impl ToSql for SubtitleFormat {
+    fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(match self {
+            SubtitleFormat::ASS => "ASS".into(),
+            SubtitleFormat::PGS => "PGS".into(),
+            SubtitleFormat::SRT => "SRT".into(),
+            SubtitleFormat::SSA => "SSA".into(),
+            SubtitleFormat::VOB => "VOB".into(),
+            SubtitleFormat::Other(s) => s.as_str().into(),
+        })
     }
 }
 
