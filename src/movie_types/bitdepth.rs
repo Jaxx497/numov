@@ -1,4 +1,7 @@
-use rusqlite::{Result as RusqliteResult, ToSql};
+use rusqlite::{
+    types::{FromSql, FromSqlResult, ValueRef},
+    Result as RusqliteResult, ToSql,
+};
 use std::fmt;
 
 #[derive(Debug)]
@@ -35,5 +38,21 @@ impl From<&i8> for BitDepth {
             8 => BitDepth::Bit8,
             i => BitDepth::Other(*i),
         }
+    }
+}
+
+impl From<&str> for BitDepth {
+    fn from(s: &str) -> Self {
+        match s {
+            "10bit" => BitDepth::Bit10,
+            "8bit" => BitDepth::Bit8,
+            i => BitDepth::Other(i.parse::<i8>().unwrap()),
+        }
+    }
+}
+
+impl FromSql for BitDepth {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().map(BitDepth::from)
     }
 }

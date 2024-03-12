@@ -72,7 +72,7 @@ impl Display for Resolution {
 
 impl ToSql for Resolution {
     fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
-        Ok(self.to_string().into()) // Leverage Display implementation for conversion
+        Ok(self.to_string().into())
     }
 }
 

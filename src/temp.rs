@@ -1,26 +1,18 @@
 use crate::database::Database;
-use crate::movie::{Movie, VideoStream};
-use crate::movie_types::resolution::Resolution;
+use crate::movie::{AudioStream, SubtitleStream, VideoStream};
 
-use matroska::Matroska;
-use rusqlite::params;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::PathBuf;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub struct MiniMovie {
     pub title: String,
     pub year: i16,
-    // pub duration: String,
     pub hash: u32,
     pub duration: String,
-    pub video: Resolution,
-    // pub audio: AudioStream,
-    // pub subs: SubtitleStream,
+    pub video: VideoStream,
+    pub audio: AudioStream,
+    pub subs: SubtitleStream,
     pub size: f32,
 }
 
@@ -33,31 +25,36 @@ pub fn build(db: &Database) {
     let path_list = _get_dirs("M:/")[103..110].to_vec();
     let mut existing = db.fetch_movies().unwrap();
     let mut collection: Vec<MiniMovie> = Vec::new();
-    let mut new_movies: Vec<MiniMovie> = Vec::new();
+    // let mut new_movies: Vec<MiniMovie> = Vec::new();
 
     println!("{:?}", existing.len());
     println!("RUNNING CODE\n====================================================");
     for path in path_list {
         let (size, hash) = numov::read_metadata(&path);
 
-        match existing.remove(&hash) {
-            Some(m) => collection.push(m),
-            _ => new_movies.push(MiniMovie {
-                title: path.file_name().unwrap().to_string_lossy().to_string(),
-                year: 2000,
-                duration: String::from("YEYE"),
-                // video: VideoStream {
-                //     resolution: Resolution::from_str(&row.get::<_, String>(""))
-
-                // }
-                video: Resolution::from("720p"),
-                hash,
-                size: make_gb(size),
-            }),
-        }
+        //     match existing.remove(&hash) {
+        //         Some(m) => collection.push(m),
+        //         _ => new_movies.push(MiniMovie {
+        //             title: path.file_name().unwrap().to_string_lossy().to_string(),
+        //             year: 2000,
+        //             duration: String::from("YEYE"),
+        //             // video: VideoStream {
+        //             //     resolution: Resolution::from_str(&row.get::<_, String>(""))
+        //
+        //             // }
+        //             resolution: Resolution::from("720p"),
+        //             codec: VideoCodec::from("x265"),
+        //             hash,
+        //             size: make_gb(size),
+        //         }),
+        //     }
     }
     //
-    println!("EXISTING_HASHMAP: {:?}", existing);
+    // println!("EXISTING_HASHMAP: {:?}", existing);
+    //
+    for x in existing.values() {
+        println!("{:?}", x);
+    }
     for z in collection {
         println!("{:?}", z);
     }

@@ -1,4 +1,7 @@
-use rusqlite::{Result as RusqliteResult, ToSql};
+use rusqlite::{
+    types::{FromSql, FromSqlResult, ValueRef},
+    Result as RusqliteResult, ToSql,
+};
 use std::fmt;
 
 #[derive(Debug)]
@@ -15,10 +18,15 @@ pub enum SubtitleFormat {
 impl From<&str> for SubtitleFormat {
     fn from(s: &str) -> Self {
         match s {
+            "ASS" => SubtitleFormat::ASS,
             "S_TEXT/ASS" => SubtitleFormat::ASS,
+            "PGS" => SubtitleFormat::PGS,
             "S_HDMV/PGS" => SubtitleFormat::PGS,
+            "UTF8" => SubtitleFormat::SRT,
             "S_TEXT/UTF8" => SubtitleFormat::SRT,
+            "SSA" => SubtitleFormat::SSA,
             "S_TEXT/SSA" => SubtitleFormat::SSA,
+            "VOB" => SubtitleFormat::VOB,
             "S_VOBSUB" => SubtitleFormat::VOB,
             _ => {
                 let other = s
@@ -53,5 +61,11 @@ impl fmt::Display for SubtitleFormat {
             SubtitleFormat::Other(s) => write!(f, "{}", s),
             _ => write!(f, "{:?}", self),
         }
+    }
+}
+
+impl FromSql for SubtitleFormat {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().map(SubtitleFormat::from)
     }
 }

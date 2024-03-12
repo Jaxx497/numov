@@ -1,15 +1,6 @@
-use crate::movie::VideoStream;
-use rusqlite::{Connection, Result};
+use crate::movie::{AudioStream, Movie, SubtitleStream, VideoStream};
+use rusqlite::{params, Connection, Result};
 use std::collections::HashMap;
-
-use crate::{
-    movie_types::{
-        bitdepth::{self, BitDepth},
-        resolution::Resolution,
-        video_codec::VideoCodec,
-    },
-    temp,
-};
 
 #[derive(Debug)]
 pub struct Database {
@@ -34,7 +25,7 @@ impl Database {
                         aud_count INTEGER NOT NULL,
                         sub_format TEXT NOT NULL,
                         sub_count INTEGER NOT NULL,
-                        hash INTEGER NOT NULL UNIQUE 
+                        hash INTEGER NOT NULL PRIMARY KEY 
                     )",
             [],
         )?;
@@ -50,30 +41,79 @@ impl Database {
         Ok(Database { conn })
     }
 
-    pub fn fetch_movies(&self) -> Result<HashMap<u32, temp::MiniMovie>, rusqlite::Error> {
+    pub fn fetch_movies(&self) -> Result<HashMap<u32, Movie>, rusqlite::Error> {
         let mut stmt = self.conn.prepare("SELECT * FROM movies")?;
 
         let existing = stmt
             .query_map([], |row| {
-                Ok(temp::MiniMovie {
+                Ok(Movie {
                     title: row.get("title")?,
                     year: row.get("year")?,
                     duration: row.get("duration")?,
-
-                    video: row.get("resolution")?,
-                    // video: VideoStream {
-                    //     resolution: Resolution::from(&row.get::<&str, _>("resolution")?),
-                    //     bit_depth: BitDepth::from(&row.get("bit_depth")?),
-                    //     codec: VideoCodec::from(&row.get("vid_codec")?.to_string()),
-                    // },
+                    video: VideoStream {
+                        resolution: row.get("resolution")?,
+                        codec: row.get("vid_codec")?,
+                        bit_depth: row.get("bit_depth")?,
+                    },
+                    audio: AudioStream {
+                        codec: row.get("aud_codec")?,
+                        channels: row.get("channels")?,
+                        count: row.get("aud_count")?,
+                    },
+                    subs: SubtitleStream {
+                        format: row.get("sub_format")?,
+                        count: row.get("sub_count")?,
+                    },
                     hash: row.get("hash")?,
                     size: row.get("size")?,
                 })
             })?
             .filter_map(Result::ok)
             .map(|movie| (movie.hash, movie))
-            .collect::<HashMap<u32, temp::MiniMovie>>();
+            .collect::<HashMap<u32, Movie>>();
 
         Ok(existing)
+    }
+
+    pub fn bulk_insert(&mut self, new_movies: &Vec<Movie>) -> rusqlite::Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+
+            let mut stmt = tx.prepare( 
+                "INSERT INTO movies (Title, Year, Size, Duration, Resolution, Vid_codec, Bit_depth, Aud_codec, Channels, Aud_count, Sub_format, Sub_count, Hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )",
+            )?;
+
+            for movie in new_movies {
+                stmt.execute( params![&movie.title,
+                        &movie.year,
+                        format!("{:.2}", &movie.size),
+                        &movie.duration,
+                        &movie.video.resolution,
+                        &movie.video.codec,
+                        &movie.video.bit_depth,
+                        &movie.audio.codec,
+                        &movie.audio.channels.to_string(),
+                        &movie.audio.count,
+                        &movie.subs.format,
+                        &movie.subs.count,
+                        &movie.hash]
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn bulk_removal(&mut self, old_hashes: &HashMap<u32, Movie>) -> rusqlite::Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare("DELETE FROM movies WHERE hash = (?)")?;
+
+            for hash in old_hashes.keys() {
+                stmt.execute(params![hash])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 }

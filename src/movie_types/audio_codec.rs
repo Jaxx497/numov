@@ -1,4 +1,7 @@
-use rusqlite::{types::ToSql, Result as RusqliteResult};
+use rusqlite::{
+    types::{FromSql, FromSqlResult, ValueRef},
+    Result as RusqliteResult, ToSql,
+};
 use std::fmt;
 
 #[derive(Debug)]
@@ -17,12 +20,20 @@ pub enum AudioCodec {
 impl From<&str> for AudioCodec {
     fn from(s: &str) -> Self {
         match s {
+            "AAC" => AudioCodec::AAC,
             "A_AAC" => AudioCodec::AAC,
+            "AC3" => AudioCodec::AC3,
             "A_AC3" => AudioCodec::AC3,
+            "DTS" => AudioCodec::DTS,
             "A_DTS" => AudioCodec::DTS,
+            "EAC3" => AudioCodec::EAC3,
             "A_EAC3" => AudioCodec::EAC3,
+            "FLAC" => AudioCodec::FLAC,
             "A_FLAC" => AudioCodec::FLAC,
+            "OPUS" => AudioCodec::OPUS,
             "A_OPUS" => AudioCodec::OPUS,
+            "Atmos" => AudioCodec::Atmos,
+            "TRUEHD" => AudioCodec::Atmos,
             "A_TRUEHD" => AudioCodec::Atmos,
             _ => {
                 let other = s
@@ -59,5 +70,11 @@ impl fmt::Display for AudioCodec {
             AudioCodec::Other(s) => write!(f, "{}", s),
             _ => write!(f, "{:?}", self),
         }
+    }
+}
+
+impl FromSql for AudioCodec {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().map(AudioCodec::from)
     }
 }

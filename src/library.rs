@@ -1,22 +1,30 @@
 #![allow(dead_code)]
 use rusqlite::Result;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, u32};
 use walkdir::WalkDir;
 
-use crate::{database::Database, movie::Movie, temp::MiniMovie};
+use crate::{database::Database, movie::Movie};
 
 #[derive(Debug)]
-pub struct Library<'a> {
-    db: &'a Database,
+pub struct Library {
+    db: Database,
     root: String,
-    pub new: Vec<String>,
-    pub existing: HashMap<u32, MiniMovie>,
-    pub collection: Vec<MiniMovie>,
+    pub existing: HashMap<u32, Movie>,
+    pub new: Vec<Movie>,
+    pub collection: Vec<Movie>,
 }
 
-impl<'a> Library<'a> {
-    pub fn new(root: &str, db: &'a Database) -> Self {
+impl Library {
+    pub fn new(root: &str) -> Self {
+        let db = match Database::new() {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("Could not make database!\nError: {e}");
+                std::process::exit(1);
+            }
+        };
         let existing = db.fetch_movies().unwrap();
+
         Library {
             db,
             root: root.to_string(),
@@ -32,61 +40,47 @@ impl<'a> Library<'a> {
         // 2. Remove all updated or deleted files
         // 3. Create `collection`
 
-        let path_list = Self::_get_dirs(&self.root)[100..107].to_vec();
-        let mut new_movies: Vec<MiniMovie> = Vec::new();
+        // Get list of paths
+        // For each path, get a hash of the file
+        // If the file is in the existing hashes
+        //      add movie to [collection]
+        //  else
+        //      Create a new movie, add to [new]
+
+        let path_list = Self::_get_dirs(&self.root);
+        // let path_list = Self::_get_dirs(&self.root)[127..135].to_vec();
 
         for path in path_list {
-            let (size, hash) = numov::read_metadata(&path);
+            let (_, hash) = numov::read_metadata(&path);
 
             match self.existing.remove(&hash) {
-                Some(m) => {
-                    println!("REMOVING MOVIE FROM EXISTING AND ADDING TO COLLECTION");
-                    self.collection.push(m);
+                Some(m) => self.collection.push(m),
+                None => {
+                    let movie = Movie::new(&path);
+                    self.new.push(movie);
                 }
-                _ => println!("CREATING NEW MOVIE"),
             }
         }
 
-        // let path_list = Self::_get_dirs(&self.root);
-        //
+        if !self.new.is_empty() {
+            match self.db.bulk_insert(&self.new) {
+                Ok(()) => {
+                    println!("ADDED MOVIES");
+                    self.new.iter().for_each(|m| println!("\t{}", m.title));
+                    self.collection.append(&mut self.new)
+                }
+                Err(e) => eprintln!("Error inserting movies: {e}"),
+            }
+        }
 
-        // self.db.conn.execute("BEGIN TRANSACTION", [])?;
-        //
-        // for path in path_list {
-        //     let (_, hash) = numov::read_metadata(&path);
-        //
-        //     if !self.existing.contains(&hash) {
-        //         let mov = Movie::new(&path);
-        //
-        //         match self.db.conn.execute(
-        //             "INSERT INTO movies (Title, Year, Size, Duration, Resolution, Vid_codec, Bit_depth, Aud_codec, Channels, Aud_count, Sub_format, Sub_count, Hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )",
-        //             (&mov.title,
-        //                 &mov.year,
-        //                 format!("{:.2}", &mov.size),
-        //                 &mov.duration,
-        //                 &mov.video.resolution,
-        //                 &mov.video.codec,
-        //                 &mov.video.bit_depth,
-        //                 &mov.audio.codec,
-        //                 &mov.audio.channels.to_string(),
-        //                 &mov.audio.count,
-        //                 &mov.subs.format,
-        //                 &mov.subs.count,
-        //                 &mov.hash,
-        //             ),
-        //         ) {
-        //             Ok(_) => {
-        //                 self.new.push(format!("{} ({})", mov.title, mov.year));
-        //                 self.collection.push(mov);
-        //             }
-        //             Err(err) => eprintln!("{:?}", err),
-        //             // Err(err) if err.to_string().contains("UNIQUE constraint failed") => {
-        //             //     self.existing.remove(&hash);
-        //             // }
-        //         }
-        //     }
-        // }
-        // self.db.conn.execute("COMMIT", []).unwrap();
+        if !self.existing.is_empty() {
+            println!("REMOVED MOVIES");
+            self.existing
+                .values()
+                .for_each(|m| println!("\t{}", m.title));
+            self.db.bulk_removal(&self.existing)?;
+        }
+
         Ok(())
     }
 

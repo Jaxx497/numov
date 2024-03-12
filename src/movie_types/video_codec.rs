@@ -1,6 +1,6 @@
 use rusqlite::{
-    types::{FromSql, ToSql},
-    Result as RusqliteResult,
+    types::{FromSql, FromSqlResult, ValueRef},
+    Result as RusqliteResult, ToSql,
 };
 use std::fmt;
 
@@ -15,7 +15,9 @@ pub enum VideoCodec {
 impl From<&str> for VideoCodec {
     fn from(s: &str) -> Self {
         match s {
+            "x265" => VideoCodec::x265,
             "V_MPEGH/ISO/HEVC" => VideoCodec::x265,
+            "x264" => VideoCodec::x264,
             "V_MPEG4/ISO/AVC" => VideoCodec::x264,
             _ => {
                 let other = s
@@ -57,3 +59,8 @@ impl ToSql for VideoCodec {
 //         })
 //     }
 // }
+impl FromSql for VideoCodec {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().map(VideoCodec::from)
+    }
+}
