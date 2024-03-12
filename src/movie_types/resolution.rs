@@ -1,5 +1,5 @@
 use rusqlite::{
-    types::{FromSql, FromSqlError},
+    types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
 use std::{
@@ -77,9 +77,7 @@ impl ToSql for Resolution {
 }
 
 impl FromSql for Resolution {
-    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-        value.as_str().and_then(|s| {
-            Resolution::from_str(s).map_err(|_| rusqlite::types::FromSqlError::InvalidType)
-        })
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().map(Resolution::from)
     }
 }

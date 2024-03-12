@@ -1,4 +1,7 @@
-use rusqlite::{types::ToSql, Result as RusqliteResult};
+use rusqlite::{
+    types::{FromSql, ToSql},
+    Result as RusqliteResult,
+};
 use std::fmt;
 
 #[derive(Debug)]
@@ -28,6 +31,15 @@ impl From<&str> for VideoCodec {
     }
 }
 
+impl fmt::Display for VideoCodec {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VideoCodec::Other(s) => write!(f, "{}", s),
+            _ => write!(f, "{:?}", self),
+        }
+    }
+}
+
 impl ToSql for VideoCodec {
     fn to_sql(&self) -> RusqliteResult<rusqlite::types::ToSqlOutput<'_>> {
         Ok(match self {
@@ -37,12 +49,11 @@ impl ToSql for VideoCodec {
         })
     }
 }
-
-impl fmt::Display for VideoCodec {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            VideoCodec::Other(s) => write!(f, "{}", s),
-            _ => write!(f, "{:?}", self),
-        }
-    }
-}
+//
+// impl FromSql for VideoCodec {
+//     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+//             value.as_str().and_then(|s| {
+//             VideoCodec::from_str(s) )
+//         })
+//     }
+// }
