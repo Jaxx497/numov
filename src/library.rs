@@ -51,8 +51,8 @@ impl Library {
     /// and build `self.collection` while updating
     /// database to reflect the provided root
     pub fn update_movies(&mut self) -> Result<()> {
-        let path_list = Self::_get_dirs(&self.root);
-        // let path_list = Self::_get_dirs(&self.root)[127..135].to_vec();
+        // let path_list = Self::_get_dirs(&self.root);
+        let path_list = Self::_get_dirs(&self.root)[130..220].to_vec();
 
         for path in path_list {
             let (_, hash) = Movie::read_metadata(&path);
@@ -69,11 +69,10 @@ impl Library {
         if !self.new.is_empty() {
             match self.db.bulk_insert(&self.new) {
                 Ok(()) => {
-                    println!("ADDED MOVIES");
+                    println!("\nADDED {} MOVIES", self.new.len());
 
-                    match self.new.len() {
-                        n if n > 20 => println!("\t Added {} new movies!", self.new.len()),
-                        _ => self.new.iter().for_each(|m| println!("\t{}", m.title)),
+                    if self.new.len() < 20 {
+                        self.new.iter().for_each(|m| println!("\t{}", m.title));
                     }
 
                     self.collection.append(&mut self.new)
@@ -83,10 +82,14 @@ impl Library {
         }
 
         if !self.existing.is_empty() {
-            println!("REMOVED MOVIES");
-            self.existing
-                .values()
-                .for_each(|m| println!("\t{}", m.title));
+            println!("\nREMOVED {} MOVIES", self.existing.len());
+
+            if self.existing.len() < 21 {
+                self.existing
+                    .values()
+                    .for_each(|m| println!("\t{}", m.title));
+            }
+
             self.db.bulk_removal(&self.existing)?;
         }
 
@@ -96,16 +99,17 @@ impl Library {
         Ok(())
     }
 
-    pub fn update_ratings(&mut self) {
+    pub fn update_ratings(&mut self) -> Result<()> {
         let ratings = Self::retrieve_ratings();
 
         match self.db.update_ratings(&ratings) {
             Ok(_) => {
-                println!("Successfully scraped {} ratings!", ratings.len());
+                println!("\tAdded {} ratings!", ratings.len());
                 self.ratings = ratings;
             }
             Err(e) => println!("Could not scrape ratings!\nError: {e}"),
         };
+        Ok(())
     }
 
     pub fn _get_dirs(root: &str) -> Vec<PathBuf> {

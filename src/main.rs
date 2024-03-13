@@ -10,14 +10,10 @@ fn main() {
     let t1 = Instant::now();
 
     let mut lib = Library::new("M:/");
-
+    //
     lib.update_movies()
         .unwrap_or_else(|e| println!("Error updating movies in database: {e}"));
-    // lib.update_ratings();
-
-    //
-    // lib.update_db();
-    // lib.update_ratings();
+    // lib.update_ratings().unwrap_or_default();
 
     println!(
         "movies: {}\nratings: {}",
