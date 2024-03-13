@@ -15,6 +15,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS movies(
                         title TEXT NOT NULL,
                         year INTEGER NOT NULL,
+                        rating TEXT,
                         size REAL NOT NULL,
                         duration TEXT NOT NULL,
                         resolution TEXT NOT NULL,
@@ -49,6 +50,7 @@ impl Database {
                 Ok(Movie {
                     title: row.get("title")?,
                     year: row.get("year")?,
+                    rating: row.get("rating")?,
                     duration: row.get("duration")?,
                     video: VideoStream {
                         resolution: row.get("resolution")?,
@@ -80,12 +82,13 @@ impl Database {
         {
 
             let mut stmt = tx.prepare( 
-                "INSERT INTO movies (Title, Year, Size, Duration, Resolution, Vid_codec, Bit_depth, Aud_codec, Channels, Aud_count, Sub_format, Sub_count, Hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )",
+                "INSERT OR REPLACE INTO movies (Title, Year, Rating, Size, Duration, Resolution, Vid_codec, Bit_depth, Aud_codec, Channels, Aud_count, Sub_format, Sub_count, Hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )?;
 
             for movie in new_movies {
                 stmt.execute( params![&movie.title,
                         &movie.year,
+                        &movie.rating,
                         format!("{:.2}", &movie.size),
                         &movie.duration,
                         &movie.video.resolution,
@@ -115,5 +118,49 @@ impl Database {
         }
         tx.commit()?;
         Ok(())
+    }
+
+
+    pub fn update_ratings(&mut self, ratings_table: &HashMap<String, String>) -> rusqlite::Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare( 
+                "INSERT OR REPLACE INTO ratings (title, rating) VALUES (?, ?)"
+            )?;
+
+            for (k, v) in ratings_table {
+                stmt.execute(params![k,v])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn fetch_ratings(&self) -> Result<HashMap<String, String>, rusqlite::Error> {
+        let mut stmt = self.conn.prepare("SELECT title, rating FROM ratings")?;
+        let ratings = stmt.query_map([], 
+            |row| Ok((row.get("title")?, row.get("rating")?)))?;
+
+        ratings.collect()
+    }
+
+    pub fn fetch_all(&self) -> (HashMap<u32, Movie>, HashMap<String, String>) {
+    let movies = match Self::fetch_movies(self) {
+            Ok(n) => n,
+            Err(e) => {
+                println!("Could not fetch movies. Error: {e}"); 
+                HashMap::new()
+            }
+        };
+
+    let ratings = match Self::fetch_ratings(self){
+            Ok(n) => n,
+            Err(e) => {
+                println!("Failed to fetch ratings. Error: {e}");
+                HashMap::new()
+            }
+        };
+
+        (movies, ratings)
     }
 }

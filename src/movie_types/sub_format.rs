@@ -18,16 +18,11 @@ pub enum SubtitleFormat {
 impl From<&str> for SubtitleFormat {
     fn from(s: &str) -> Self {
         match s {
-            "ASS" => SubtitleFormat::ASS,
-            "S_TEXT/ASS" => SubtitleFormat::ASS,
-            "PGS" => SubtitleFormat::PGS,
-            "S_HDMV/PGS" => SubtitleFormat::PGS,
-            "UTF8" => SubtitleFormat::SRT,
-            "S_TEXT/UTF8" => SubtitleFormat::SRT,
-            "SSA" => SubtitleFormat::SSA,
-            "S_TEXT/SSA" => SubtitleFormat::SSA,
-            "VOB" => SubtitleFormat::VOB,
-            "S_VOBSUB" => SubtitleFormat::VOB,
+            "ASS" | "S_TEXT/ASS" => SubtitleFormat::ASS,
+            "PGS" | "S_HDMV/PGS" => SubtitleFormat::PGS,
+            "UTF8" | "S_TEXT/UTF8" => SubtitleFormat::SRT,
+            "SSA" | "S_TEXT/SSA" => SubtitleFormat::SSA,
+            "VOB" | "S_VOBSUB" => SubtitleFormat::VOB,
             _ => {
                 let other = s
                     .split('_')

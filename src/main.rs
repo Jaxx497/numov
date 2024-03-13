@@ -2,17 +2,28 @@ mod database;
 mod library;
 mod movie;
 mod movie_types;
-mod ratings;
-mod temp;
 
-use database::Database;
 use library::Library;
 use std::time::Instant;
 
 fn main() {
     let t1 = Instant::now();
+
     let mut lib = Library::new("M:/");
-    lib.build().unwrap();
+
+    lib.update_movies()
+        .unwrap_or_else(|e| println!("Error updating movies in database: {e}"));
+    // lib.update_ratings();
+
+    //
+    // lib.update_db();
+    // lib.update_ratings();
+
+    println!(
+        "movies: {}\nratings: {}",
+        lib.collection.len(),
+        lib.ratings.len()
+    );
 
     println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }

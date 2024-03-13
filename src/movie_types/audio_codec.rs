@@ -14,27 +14,21 @@ pub enum AudioCodec {
     DTS,
     FLAC,
     OPUS,
+    PCM,
     Other(String),
 }
 
 impl From<&str> for AudioCodec {
     fn from(s: &str) -> Self {
-        match s {
+        match s.trim_start_matches("A_") {
             "AAC" => AudioCodec::AAC,
-            "A_AAC" => AudioCodec::AAC,
             "AC3" => AudioCodec::AC3,
-            "A_AC3" => AudioCodec::AC3,
             "DTS" => AudioCodec::DTS,
-            "A_DTS" => AudioCodec::DTS,
             "EAC3" => AudioCodec::EAC3,
-            "A_EAC3" => AudioCodec::EAC3,
             "FLAC" => AudioCodec::FLAC,
-            "A_FLAC" => AudioCodec::FLAC,
             "OPUS" => AudioCodec::OPUS,
-            "A_OPUS" => AudioCodec::OPUS,
-            "Atmos" => AudioCodec::Atmos,
-            "TRUEHD" => AudioCodec::Atmos,
-            "A_TRUEHD" => AudioCodec::Atmos,
+            "PCM" => AudioCodec::PCM,
+            "Atmos" | "TRUEHD" => AudioCodec::Atmos,
             _ => {
                 let other = s
                     .split('_')
@@ -58,6 +52,7 @@ impl ToSql for AudioCodec {
             AudioCodec::EAC3 => "EAC3".into(),
             AudioCodec::FLAC => "FLAC".into(),
             AudioCodec::OPUS => "OPUS".into(),
+            AudioCodec::PCM => "PCM".into(),
             AudioCodec::Atmos => "Atmos".into(),
             AudioCodec::Other(s) => s.as_str().into(),
         })

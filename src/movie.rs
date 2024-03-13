@@ -5,9 +5,11 @@ use matroska::{
     Settings::{Audio, Video},
     Track, Tracktype,
 };
+
 use regex::Regex;
 use std::fmt::{Display, Formatter, Result};
 use std::path::{Path, PathBuf};
+use xxhash_rust::const_xxh32::xxh32;
 
 use crate::movie_types::{
     audio_codec::AudioCodec, bitdepth::BitDepth, resolution::Resolution,
@@ -42,38 +44,33 @@ pub struct SubtitleStream {
 pub struct Movie {
     pub title: String,
     pub year: i16,
+    pub rating: Option<String>,
+    pub size: f32,
     pub duration: String,
     pub video: VideoStream,
     pub audio: AudioStream,
     pub subs: SubtitleStream,
     pub hash: u32,
-    pub size: f32,
 }
 
 impl Movie {
     pub fn new(path: &PathBuf) -> Self {
         let matroska = Matroska::open(std::fs::File::open(path).unwrap()).unwrap();
-
-        Self::collection(&matroska, path)
+        Self::collect(&matroska, path)
     }
 
-    fn collection(matroska: &Matroska, path: &Path) -> Self {
+    fn collect(matroska: &Matroska, path: &Path) -> Self {
         let (title, year) = Self::get_title_year(matroska, path).unwrap();
-        // println!("{}", title);
-
-        let (byte_count, hash) = numov::read_metadata(path);
+        let (byte_count, hash) = Self::read_metadata(path);
         let duration = Self::readable_duration(&matroska.info.duration.unwrap());
-
-        let size = numov::make_gb(byte_count);
-
-        // let vid_stream = Self::get_video_stream(&matroska.tracks);
-        let (audio, subs) = Self::process_tracks(&matroska.tracks);
-
+        let size = Self::make_gb(byte_count);
         let video = Self::get_video_stream(&matroska.tracks[0]);
+        let (audio, subs) = Self::process_tracks(&matroska.tracks);
 
         Movie {
             title,
             year,
+            rating: None,
             duration,
             video,
             audio,
@@ -88,6 +85,32 @@ impl Movie {
         let minutes = (duration.as_secs() % 3600) / 60;
 
         format!("{}h {:02}min", hours, minutes)
+    }
+
+    pub fn make_gb(bytes: u64) -> f32 {
+        ["B", "KB", "MB", "GB"]
+            .iter()
+            .fold(bytes as f32, |acc, _| match acc > 1024.0 {
+                true => acc / 1024.0,
+                false => acc,
+            })
+    }
+
+    pub fn read_metadata(path: &Path) -> (u64, u32) {
+        let bytes = std::fs::metadata(path)
+            .expect("Could not read files metadata.")
+            .len();
+
+        let last_mod = path
+            .metadata()
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("Could not convert to timestamp.")
+            .as_nanos();
+
+        (bytes, xxh32(&(bytes as u128 + last_mod).to_be_bytes(), 0))
     }
 
     fn get_title_year(matroska: &Matroska, path: &Path) -> Option<(String, i16)> {

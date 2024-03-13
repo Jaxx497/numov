@@ -15,10 +15,8 @@ pub enum VideoCodec {
 impl From<&str> for VideoCodec {
     fn from(s: &str) -> Self {
         match s {
-            "x265" => VideoCodec::x265,
-            "V_MPEGH/ISO/HEVC" => VideoCodec::x265,
-            "x264" => VideoCodec::x264,
-            "V_MPEG4/ISO/AVC" => VideoCodec::x264,
+            "x264" | "V_MPEG4/ISO/AVC" => VideoCodec::x264,
+            "x265" | "V_MPEGH/ISO/HEVC" => VideoCodec::x265,
             _ => {
                 let other = s
                     .split('_')
@@ -51,14 +49,7 @@ impl ToSql for VideoCodec {
         })
     }
 }
-//
-// impl FromSql for VideoCodec {
-//     fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
-//             value.as_str().and_then(|s| {
-//             VideoCodec::from_str(s) )
-//         })
-//     }
-// }
+
 impl FromSql for VideoCodec {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().map(VideoCodec::from)
