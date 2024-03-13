@@ -35,8 +35,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS ratings(
                         title TEXT PRIMARY KEY,
                         rating TEXT NOT NULL
-                    )",
-            [],
+                    )", [],
         )?;
 
         Ok(Database { conn })
@@ -119,7 +118,6 @@ impl Database {
         tx.commit()?;
         Ok(())
     }
-
 
     pub fn update_ratings(&mut self, ratings_table: &HashMap<String, String>) -> rusqlite::Result<()> {
         let tx = self.conn.transaction()?;

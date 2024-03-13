@@ -51,8 +51,8 @@ impl Library {
     /// and build `self.collection` while updating
     /// database to reflect the provided root
     pub fn update_movies(&mut self) -> Result<()> {
-        // let path_list = Self::_get_dirs(&self.root);
-        let path_list = Self::_get_dirs(&self.root)[130..220].to_vec();
+        let path_list = Self::_get_dirs(&self.root);
+        // let path_list = Self::_get_dirs(&self.root)[130..220].to_vec();
 
         for path in path_list {
             let (_, hash) = Movie::read_metadata(&path);
