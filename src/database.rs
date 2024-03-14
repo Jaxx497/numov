@@ -1,6 +1,6 @@
 use crate::movie::{AudioStream, Movie, SubtitleStream, VideoStream};
 use rusqlite::{params, Connection, Result};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Database {
@@ -76,7 +76,7 @@ impl Database {
         Ok(existing)
     }
 
-    pub fn bulk_insert(&mut self, new_movies: &Vec<Movie>) -> rusqlite::Result<()> {
+    pub fn bulk_insert(&mut self, new_movies: &HashMap<u32, Movie>) -> rusqlite::Result<()> {
         let tx = self.conn.transaction()?;
         {
 
@@ -84,7 +84,7 @@ impl Database {
                 "INSERT OR REPLACE INTO movies (Title, Year, Rating, Size, Duration, Resolution, Vid_codec, Bit_depth, Aud_codec, Channels, Aud_count, Sub_format, Sub_count, Hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )?;
 
-            for movie in new_movies {
+            for movie in new_movies.values() {
                 stmt.execute( params![&movie.title,
                         &movie.year,
                         &movie.rating,
@@ -106,12 +106,12 @@ impl Database {
         Ok(())
     }
 
-    pub fn bulk_removal(&mut self, old_hashes: &HashMap<u32, Movie>) -> rusqlite::Result<()> {
+    pub fn bulk_removal(&mut self, old_hashes: &HashSet<u32>) -> rusqlite::Result<()> {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare("DELETE FROM movies WHERE hash = (?)")?;
 
-            for hash in old_hashes.keys() {
+            for hash in old_hashes {
                 stmt.execute(params![hash])?;
             }
         }

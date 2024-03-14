@@ -5,17 +5,24 @@ use select::{
     document::Document,
     predicate::{Attr, Class},
 };
-use std::{collections::HashMap, path::PathBuf, u32};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Stdout,
+    path::PathBuf,
+    time::Instant,
+    u32,
+};
+use strsim::jaro_winkler;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub struct Library {
-    db: Database,
+    pub db: Database,
     root: String,
+    new: Vec<String>,
+    pub collection: HashMap<u32, Movie>,
+    pub old_collection: HashSet<u32>,
     pub ratings: HashMap<String, String>,
-    pub existing: HashMap<u32, Movie>,
-    pub new: Vec<Movie>,
-    pub collection: Vec<Movie>,
 }
 
 impl Library {
@@ -28,87 +35,110 @@ impl Library {
             }
         };
 
-        let (existing, ratings) = db.fetch_all();
-        if !existing.is_empty() || !ratings.is_empty() {
+        let (collection, ratings) = db.fetch_all();
+        if !collection.is_empty() || !ratings.is_empty() {
             println!(
                 "Read in {} movies and {} ratings from database.",
-                existing.len(),
+                collection.len(),
                 ratings.len()
             );
         }
+
+        let old_collection = collection.keys().cloned().collect::<HashSet<u32>>();
 
         Library {
             db,
             root: root.to_string(),
             new: vec![],
             ratings,
-            collection: vec![],
-            existing,
+            collection,
+            old_collection,
         }
     }
 
-    /// Run existing files against database entries
-    /// and build `self.collection` while updating
-    /// database to reflect the provided root
     pub fn update_movies(&mut self) -> Result<()> {
-        let path_list = Self::_get_dirs(&self.root);
-        // let path_list = Self::_get_dirs(&self.root)[130..220].to_vec();
-
+        let path_list = Self::_get_dirs(&self.root)[..170].to_vec();
+        // let path_list = Self::_get_dirs(&self.root);
+        let mut m_prog = Prog::new(path_list.len(), "updating moving list");
         for path in path_list {
             let (_, hash) = Movie::read_metadata(&path);
+            if !self.old_collection.remove(&hash) {
+                let movie = Movie::new(&path);
+                self.new.push(format!("{} [{}]", &movie.title, &movie.hash));
+                self.collection.insert(hash, movie);
+                m_prog.inc();
+            }
+        }
+        m_prog.end();
 
-            match self.existing.remove(&hash) {
-                Some(m) => self.collection.push(m),
-                None => {
-                    let movie = Movie::new(&path);
-                    self.new.push(movie);
-                }
+        if !self.ratings.is_empty() {
+            match self.map_ratings() {
+                Ok(()) => (),
+                // Ok(()) => println!("UPDATED RATINGS FOR MOVIES"),
+                Err(e) => println!("Error mapping ratings to movies. {e}"),
             }
         }
 
         if !self.new.is_empty() {
-            match self.db.bulk_insert(&self.new) {
+            match self.db.bulk_insert(&self.collection) {
                 Ok(()) => {
                     println!("\nADDED {} MOVIES", self.new.len());
 
                     if self.new.len() < 20 {
-                        self.new.iter().for_each(|m| println!("\t{}", m.title));
+                        self.new.iter().for_each(|m| println!("\t{}", m));
                     }
-
-                    self.collection.append(&mut self.new)
                 }
                 Err(e) => eprintln!("Error inserting movies: {e}"),
             }
         }
 
-        if !self.existing.is_empty() {
-            println!("\nREMOVED {} MOVIES", self.existing.len());
+        // If any leftover values in `old_collection`...
+        if !self.old_collection.is_empty() {
+            println!("\nREMOVED {} MOVIES", self.old_collection.len());
 
-            if self.existing.len() < 21 {
-                self.existing
-                    .values()
-                    .for_each(|m| println!("\t{}", m.title));
+            match self.old_collection.len() <= 15 {
+                true => self.old_collection.iter().for_each(|bad_hash| {
+                    if let Some(m) = self.collection.remove(bad_hash) {
+                        println!("\t{} [{:x}]", m.title, m.hash);
+                    }
+                }),
+                false => self.old_collection.iter().for_each(|bad_hash| {
+                    self.collection.remove(bad_hash);
+                }),
             }
-
-            self.db.bulk_removal(&self.existing)?;
+            self.db.bulk_removal(&self.old_collection)?;
         }
-
-        self.collection
-            .sort_unstable_by(|a, b| a.title.cmp(&b.title));
-
         Ok(())
     }
 
-    pub fn update_ratings(&mut self) -> Result<()> {
-        let ratings = Self::retrieve_ratings();
+    pub fn update_ratings(&mut self, user_name: &str) -> Result<()> {
+        let ratings = Self::retrieve_ratings(user_name);
 
         match self.db.update_ratings(&ratings) {
             Ok(_) => {
-                println!("\tAdded {} ratings!", ratings.len());
+                println!("ADDED {} RATINGS!", ratings.len());
                 self.ratings = ratings;
             }
             Err(e) => println!("Could not scrape ratings!\nError: {e}"),
         };
+        Ok(())
+    }
+
+    pub fn map_ratings(&mut self) -> Result<()> {
+        for movie in self.collection.values_mut() {
+            let mut best_match = (0.0, None);
+
+            for (rating_title, rating_value) in &self.ratings {
+                let similarity = jaro_winkler(&movie.title, rating_title);
+
+                if similarity > best_match.0 {
+                    best_match = (similarity, Some(rating_value.clone()))
+                }
+            }
+            if best_match.0 >= 0.85 {
+                movie.rating = best_match.1;
+            }
+        }
         Ok(())
     }
 
@@ -132,11 +162,11 @@ impl Library {
 // RATINGS RELATED
 // =====================
 impl Library {
-    fn retrieve_ratings() -> HashMap<String, String> {
-        let url = "https://letterboxd.com/equus497/films/";
+    fn retrieve_ratings(user_name: &str) -> HashMap<String, String> {
+        let url = format! {"https://letterboxd.com/{}/films/", user_name};
         let mut catalogue = HashMap::new();
 
-        let doc = Self::get_document(url);
+        let doc = Self::get_document(&url);
 
         let mut last_page = match doc.find(Class("paginate-pages")).into_selection().first() {
             Some(n) => n
@@ -151,11 +181,15 @@ impl Library {
 
         Self::extract_info(&doc, &mut catalogue);
 
+        let mut lb_prog = Prog::new(last_page, "scraping user ratings");
+        lb_prog.pb.show_counter = false;
         while last_page > 1 {
             let doc = Self::get_document(&format!("{}/page/{}", url, last_page));
             Self::extract_info(&doc, &mut catalogue);
             last_page -= 1;
+            lb_prog.inc();
         }
+        lb_prog.end();
         catalogue
     }
 
@@ -182,12 +216,41 @@ impl Library {
 
             let rating = poster.text().trim().to_string();
 
-            if let Some(existing_rating) = catalogue.get(&title) {
-                if existing_rating.len() > rating.len() {
+            if let Some(old_collection_rating) = catalogue.get(&title) {
+                if old_collection_rating.len() > rating.len() {
                     continue;
                 }
             }
             catalogue.insert(title, rating);
         }
+    }
+}
+
+struct Prog {
+    pub pb: pbr::ProgressBar<Stdout>,
+    t1: Instant,
+    job: String,
+}
+impl Prog {
+    fn new(total: usize, job: &str) -> Self {
+        Prog {
+            pb: pbr::ProgressBar::new(total as u64),
+            t1: Instant::now(),
+            job: job.to_string(),
+        }
+    }
+
+    fn inc(&mut self) {
+        self.pb.inc();
+    }
+
+    fn end(&mut self) {
+        let output = format!(
+            "\tFinished {} in {:.4?}.",
+            self.job,
+            Instant::now() - self.t1
+        );
+        self.pb.finish_println(&output);
+        println!();
     }
 }

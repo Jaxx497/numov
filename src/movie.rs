@@ -126,7 +126,7 @@ impl Movie {
         Self::extract_title_year(&metadata_title)
             .or_else(|| {
                 Self::extract_title_year(parent).map(|(title, year)| {
-                    println!("TODO UPDATE METADATA FOR {}", title);
+                    Self::mkvinfo_update(&title, year, path);
                     (title, year)
                 })
             })
@@ -145,6 +145,35 @@ impl Movie {
             let year: i16 = captures.get(2).unwrap().as_str().parse().unwrap();
             (title, year)
         })
+    }
+
+    fn mkvinfo_update(title: &str, year: i16, path: &Path) {
+        let formatted_title = format!("title={title} ({year})");
+
+        let output = std::process::Command::new("mkvpropedit")
+            .arg(path.to_str().unwrap())
+            .arg("--tags")
+            .arg("all:")
+            .arg("--edit")
+            .arg("info")
+            .arg("--set")
+            .arg(&formatted_title)
+            .arg("--edit")
+            .arg("track:s1")
+            .arg("--set")
+            .arg("flag-default=1")
+            .output();
+
+        match output {
+            Ok(o) => match o.status.success() {
+                true => println!(
+                    "Wrote title to metadata of file. [{}]",
+                    &formatted_title.split('=').last().unwrap_or_default()
+                ),
+                false => println!("FAILED TO UPDATE FILE TITLE: {:?}", path.file_name()),
+            },
+            Err(e) => println!("Failed to run mkvpropedit with error: {e}"),
+        }
     }
 
     fn get_video_stream(track: &Track) -> VideoStream {
