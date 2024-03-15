@@ -4,7 +4,6 @@ mod movie;
 mod movie_types;
 
 use library::Library;
-use movie::Movie;
 use std::time::Instant;
 
 fn main() {
@@ -15,7 +14,7 @@ fn main() {
     // lib.update_ratings("equus497").unwrap_or_default();
     lib.update_movies()
         .unwrap_or_else(|e| println!("Error updating movies in database: {e}"));
-    //
+    lib.output_to_csv();
 
     println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }

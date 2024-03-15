@@ -1,3 +1,7 @@
+use crate::movie_types::{
+    audio_codec::AudioCodec, bitdepth::BitDepth, resolution::Resolution,
+    sub_format::SubtitleFormat, video_codec::VideoCodec,
+};
 use core::time::Duration;
 use lazy_static::lazy_static;
 use matroska::{
@@ -5,42 +9,37 @@ use matroska::{
     Settings::{Audio, Video},
     Track, Tracktype,
 };
-
 use regex::Regex;
+use serde::Serialize;
 use std::fmt::{Display, Formatter, Result};
 use std::path::{Path, PathBuf};
 use xxhash_rust::const_xxh32::xxh32;
-
-use crate::movie_types::{
-    audio_codec::AudioCodec, bitdepth::BitDepth, resolution::Resolution,
-    sub_format::SubtitleFormat, video_codec::VideoCodec,
-};
 
 lazy_static! {
     static ref RE: Regex = Regex::new(r"(?P<title>.*) \((?P<year>\d{4})\)").unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct VideoStream {
     pub resolution: Resolution,
     pub codec: VideoCodec,
     pub bit_depth: BitDepth,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct AudioStream {
     pub codec: AudioCodec,
     pub channels: f32,
     pub count: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct SubtitleStream {
     pub format: SubtitleFormat,
     pub count: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Movie {
     pub title: String,
     pub year: i16,
@@ -51,6 +50,7 @@ pub struct Movie {
     pub audio: AudioStream,
     pub subs: SubtitleStream,
     pub hash: u32,
+    pub path: PathBuf,
 }
 
 impl Movie {
@@ -77,6 +77,7 @@ impl Movie {
             subs,
             hash,
             size,
+            path: path.to_owned(),
         }
     }
 
@@ -97,20 +98,17 @@ impl Movie {
     }
 
     pub fn read_metadata(path: &Path) -> (u64, u32) {
-        let bytes = std::fs::metadata(path)
-            .expect("Could not read files metadata.")
-            .len();
-
-        let last_mod = path
-            .metadata()
-            .unwrap()
+        let metadata = std::fs::metadata(path).expect("Could not read the files metadata.");
+        let bytes = metadata.len();
+        let last_mod = metadata
             .modified()
-            .unwrap()
+            .expect("Could not obtain last modified date of file.")
             .duration_since(std::time::UNIX_EPOCH)
             .expect("Could not convert to timestamp.")
             .as_nanos();
 
-        (bytes, xxh32(&(bytes as u128 + last_mod).to_be_bytes(), 0))
+        let hash_input = format!("{}{}{}", bytes, last_mod, &path.display());
+        (bytes, xxh32(hash_input.as_bytes(), 0))
     }
 
     fn get_title_year(matroska: &Matroska, path: &Path) -> Option<(String, i16)> {
@@ -123,7 +121,7 @@ impl Movie {
             .expect("Could not read parent folder name.")
             .to_str()?;
 
-        Self::extract_title_year(&metadata_title)
+        Self::extract_title_year(metadata_title)
             .or_else(|| {
                 Self::extract_title_year(parent).map(|(title, year)| {
                     Self::mkvinfo_update(&title, year, path);
@@ -139,16 +137,16 @@ impl Movie {
             })
     }
 
-    fn extract_title_year(str: &str) -> Option<(String, i16)> {
-        RE.captures(str).map(|captures| {
+    fn extract_title_year(str: impl AsRef<str>) -> Option<(String, i16)> {
+        RE.captures(str.as_ref()).map(|captures| {
             let title = captures.get(1).unwrap().as_str().to_string();
             let year: i16 = captures.get(2).unwrap().as_str().parse().unwrap();
             (title, year)
         })
     }
 
-    fn mkvinfo_update(title: &str, year: i16, path: &Path) {
-        let formatted_title = format!("title={title} ({year})");
+    fn mkvinfo_update(title: impl AsRef<str>, year: i16, path: &Path) {
+        let formatted_title = format!("title={} ({year})", title.as_ref());
 
         let output = std::process::Command::new("mkvpropedit")
             .arg(path.to_str().unwrap())

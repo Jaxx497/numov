@@ -2,12 +2,13 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
+use serde::Serialize;
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub enum Resolution {
     SD,
     HD720,

@@ -1,6 +1,6 @@
 use crate::movie::{AudioStream, Movie, SubtitleStream, VideoStream};
 use rusqlite::{params, Connection, Result};
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, path::PathBuf};
 
 #[derive(Debug)]
 pub struct Database {
@@ -67,6 +67,7 @@ impl Database {
                     },
                     hash: row.get("hash")?,
                     size: row.get("size")?,
+                    path: PathBuf::new(),
                 })
             })?
             .filter_map(Result::ok)
@@ -110,7 +111,6 @@ impl Database {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare("DELETE FROM movies WHERE hash = (?)")?;
-
             for hash in old_hashes {
                 stmt.execute(params![hash])?;
             }
@@ -143,21 +143,17 @@ impl Database {
     }
 
     pub fn fetch_all(&self) -> (HashMap<u32, Movie>, HashMap<String, String>) {
-    let movies = match Self::fetch_movies(self) {
-            Ok(n) => n,
-            Err(e) => {
-                println!("Could not fetch movies. Error: {e}"); 
-                HashMap::new()
-            }
-        };
 
-    let ratings = match Self::fetch_ratings(self){
-            Ok(n) => n,
-            Err(e) => {
-                println!("Failed to fetch ratings. Error: {e}");
-                HashMap::new()
-            }
-        };
+        let movies = self.fetch_movies().unwrap_or_else(|e| {
+            println!("Could not fetch movies. Error: {e}"); 
+            HashMap::new()
+        });
+
+
+        let ratings = self.fetch_ratings().unwrap_or_else(|e| {
+            println!("Failed to fetch ratings. Error: {e}");
+            HashMap::new()
+        });
 
         (movies, ratings)
     }

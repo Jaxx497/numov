@@ -20,20 +20,17 @@ pub struct Library {
     pub db: Database,
     root: String,
     new: Vec<String>,
-    pub collection: HashMap<u32, Movie>,
     pub old_collection: HashSet<u32>,
+    pub collection: HashMap<u32, Movie>,
     pub ratings: HashMap<String, String>,
 }
 
 impl Library {
-    pub fn new(root: &str) -> Self {
-        let db = match Database::new() {
-            Ok(x) => x,
-            Err(e) => {
-                eprintln!("Could not make database!\nError: {e}");
-                std::process::exit(1);
-            }
-        };
+    pub fn new(root: impl Into<String>) -> Self {
+        let db = Database::new().unwrap_or_else(|e| {
+            eprintln!("Could not make database!\nError: {e}");
+            std::process::exit(1);
+        });
 
         let (collection, ratings) = db.fetch_all();
         if !collection.is_empty() || !ratings.is_empty() {
@@ -48,7 +45,7 @@ impl Library {
 
         Library {
             db,
-            root: root.to_string(),
+            root: root.into(),
             new: vec![],
             ratings,
             collection,
@@ -57,8 +54,12 @@ impl Library {
     }
 
     pub fn update_movies(&mut self) -> Result<()> {
-        let path_list = Self::_get_dirs(&self.root)[..170].to_vec();
-        // let path_list = Self::_get_dirs(&self.root);
+        // For each .mkv in the path_list
+        //  Generate hash, and try to remove it from hashet
+        //  If it cannot be removed:
+        //      Create a new movie instance, and add it to collection
+        // let path_list = Self::_get_dirs(&self.root)[..170].to_vec();
+        let path_list = Self::_get_dirs(&self.root);
         let mut m_prog = Prog::new(path_list.len(), "updating moving list");
         for path in path_list {
             let (_, hash) = Movie::read_metadata(&path);
@@ -71,14 +72,16 @@ impl Library {
         }
         m_prog.end();
 
+        // If data is in the `ratings` table, map ratings to collection items
         if !self.ratings.is_empty() {
             match self.map_ratings() {
-                Ok(()) => (),
-                // Ok(()) => println!("UPDATED RATINGS FOR MOVIES"),
+                Ok(n) => println!("Successfully mapped ratings to {n} movies."),
                 Err(e) => println!("Error mapping ratings to movies. {e}"),
             }
         }
 
+        // If there are new movies,
+        //  Write movies to database
         if !self.new.is_empty() {
             match self.db.bulk_insert(&self.collection) {
                 Ok(()) => {
@@ -88,11 +91,12 @@ impl Library {
                         self.new.iter().for_each(|m| println!("\t{}", m));
                     }
                 }
-                Err(e) => eprintln!("Error inserting movies: {e}"),
+                Err(e) => eprintln!("Error inserting movies into database.\nError: {e}"),
             }
         }
 
-        // If any leftover values in `old_collection`...
+        // If any leftover values in `old_collection`
+        //  Remove them from the database
         if !self.old_collection.is_empty() {
             println!("\nREMOVED {} MOVIES", self.old_collection.len());
 
@@ -111,6 +115,7 @@ impl Library {
         Ok(())
     }
 
+    /// Given a `user_name` (String) from letterboxd, scrape ratings and store in database
     pub fn update_ratings(&mut self, user_name: &str) -> Result<()> {
         let ratings = Self::retrieve_ratings(user_name);
 
@@ -124,7 +129,8 @@ impl Library {
         Ok(())
     }
 
-    pub fn map_ratings(&mut self) -> Result<()> {
+    pub fn map_ratings(&mut self) -> Result<i32> {
+        let mut count = 0;
         for movie in self.collection.values_mut() {
             let mut best_match = (0.0, None);
 
@@ -136,10 +142,11 @@ impl Library {
                 }
             }
             if best_match.0 >= 0.85 {
+                count += 1;
                 movie.rating = best_match.1;
             }
         }
-        Ok(())
+        Ok(count)
     }
 
     pub fn _get_dirs(root: &str) -> Vec<PathBuf> {
@@ -226,6 +233,55 @@ impl Library {
     }
 }
 
+impl Library {
+    pub fn output_to_csv(self) {
+        // let mut wtr = csv::Writer::from_writer(io::stout());
+        let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
+
+        let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
+
+        wtr.serialize([
+            "Title",
+            "Year",
+            "Rating",
+            "Duration",
+            "Size",
+            "Resolution",
+            "V_Coec",
+            "Bit_depth",
+            "A_Codec",
+            "Channels",
+            "Sub_Format",
+            "Hash",
+            "Audio #",
+            "Sub #",
+        ])
+        .ok();
+
+        self.collection.values().for_each(|m| {
+            wtr.serialize((
+                &m.title,
+                &m.year,
+                &m.rating,
+                &m.duration,
+                format!("{:.2}", m.size),
+                &m.video.resolution,
+                &m.video.codec,
+                &m.video.bit_depth,
+                &m.audio.codec,
+                &m.audio.channels,
+                &m.subs.format,
+                &m.hash,
+                &m.audio.count,
+                &m.subs.count,
+            ))
+            .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
+            csv_prog.inc();
+        });
+        csv_prog.end();
+    }
+}
+
 struct Prog {
     pub pb: pbr::ProgressBar<Stdout>,
     t1: Instant,
@@ -246,7 +302,7 @@ impl Prog {
 
     fn end(&mut self) {
         let output = format!(
-            "\tFinished {} in {:.4?}.",
+            "\tFinished {} in {:.4?}",
             self.job,
             Instant::now() - self.t1
         );

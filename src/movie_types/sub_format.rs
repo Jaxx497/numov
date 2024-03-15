@@ -2,9 +2,10 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
+use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum SubtitleFormat {
     ASS,
