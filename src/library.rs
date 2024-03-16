@@ -53,25 +53,20 @@ impl Library {
     //  Generate hash, and try to remove it from hashet
     //  If it cannot be removed:
     //      Create a new movie instance, and add it to collection
-    pub fn update_movies(&mut self) -> Result<(usize, usize)> {
-        let mut new = vec![];
-        let mut removed = vec![];
-
+    pub fn update_movies(&mut self) -> Result<()> {
         let mut old_collection = self.collection.keys().cloned().collect::<HashSet<u32>>();
+        let mut new = vec![];
 
         let path_list = Self::_get_dirs(&self.root);
-        let mut m_prog = Prog::new(path_list.len(), "updating movie list");
 
-        for path in &path_list {
+        for path in &path_list[..40].to_vec() {
             let hash = Movie::read_metadata(path).1;
             if !old_collection.remove(&hash) {
                 let movie = Movie::new(path);
-                new.push((movie.title.clone(), movie.hash));
+                new.push(format!("{} ({})", movie.title.to_owned(), movie.year));
                 self.collection.insert(hash, movie);
-                m_prog.inc();
             }
         }
-        m_prog.end();
 
         // If data is in the `ratings` table, map ratings to collection items
         if !self.ratings.is_empty() {
@@ -89,27 +84,39 @@ impl Library {
             }
         }
 
+        let mut logger: HashMap<String, ItemStatus> = new
+            .into_iter()
+            .map(|title| (title, ItemStatus::New))
+            .collect();
         // If any leftover values in `old_collection`
         //  Remove them from the database
         // if !old_collection.is_empty() {
+        let mut removed = vec![];
         if !old_collection.is_empty() {
             old_collection.iter().for_each(|bad_hash| {
                 if let Some(m) = self.collection.remove(bad_hash) {
-                    removed.push((m.title.clone(), m.hash));
+                    removed.push(format!("{} ({})", m.title.to_owned(), m.year));
                 }
             });
             self.db.bulk_removal(&old_collection)?;
         }
 
-        let zip = new.iter().zip(removed.iter());
+        removed.into_iter().for_each(|title| {
+            logger
+                .entry(title)
+                .and_modify(|t| *t = ItemStatus::Updated)
+                .or_insert(ItemStatus::Removed);
+        });
 
-        for (n, r) in zip {
-            if n.0 == r.0 {
-                println!(" ++ UPDATED: {}", n.0);
+        for (k, v) in logger {
+            match v {
+                ItemStatus::New => println!("++ {k}"),
+                ItemStatus::Updated => println!("** {k}"),
+                ItemStatus::Removed => println!("-- {k}"),
             }
         }
 
-        Ok((new.len(), old_collection.len()))
+        Ok(())
     }
 
     /// Given a `user_name` (String) from letterboxd, scrape ratings and store in database
@@ -146,8 +153,8 @@ impl Library {
         Ok(count)
     }
 
-    pub fn _get_dirs(root: &str) -> Vec<PathBuf> {
-        WalkDir::new(root)
+    pub fn _get_dirs(root: impl AsRef<str>) -> Vec<PathBuf> {
+        WalkDir::new(root.as_ref())
             .max_depth(2)
             .into_iter()
             .filter_map(|file| {
@@ -166,10 +173,9 @@ impl Library {
 // RATINGS RELATED
 // =====================
 impl Library {
-    fn retrieve_ratings(user_name: &str) -> HashMap<String, String> {
-        let url = format! {"https://letterboxd.com/{}/films/", user_name};
+    fn retrieve_ratings(user_name: impl AsRef<str>) -> HashMap<String, String> {
+        let url = format! {"https://letterboxd.com/{}/films/", user_name.as_ref()};
         let mut catalogue = HashMap::new();
-
         let doc = Self::get_document(&url);
 
         let mut last_page = match doc.find(Class("paginate-pages")).into_selection().first() {
@@ -349,6 +355,7 @@ struct Prog {
     t1: Instant,
     job: String,
 }
+
 impl Prog {
     fn new(total: usize, job: &str) -> Self {
         Prog {
@@ -371,4 +378,11 @@ impl Prog {
         self.pb.finish_println(&output);
         println!();
     }
+}
+
+#[derive(Debug)]
+enum ItemStatus {
+    New,
+    Removed,
+    Updated,
 }

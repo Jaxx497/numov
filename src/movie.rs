@@ -12,7 +12,7 @@ use matroska::{
 use regex::Regex;
 use serde::Serialize;
 use std::fmt::{Display, Formatter, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use xxhash_rust::const_xxh32::xxh32;
 
 lazy_static! {
@@ -54,9 +54,9 @@ pub struct Movie {
 }
 
 impl Movie {
-    pub fn new(path: &PathBuf) -> Self {
-        let matroska = Matroska::open(std::fs::File::open(path).unwrap()).unwrap();
-        Self::collect(&matroska, path)
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        let matroska = Matroska::open(std::fs::File::open(path.as_ref()).unwrap()).unwrap();
+        Self::collect(&matroska, path.as_ref())
     }
 
     fn collect(matroska: &Matroska, path: &Path) -> Self {
@@ -97,8 +97,10 @@ impl Movie {
             })
     }
 
-    pub fn read_metadata(path: &Path) -> (u64, u32) {
-        let metadata = std::fs::metadata(path).expect("Could not read the files metadata.");
+    // pub fn read_metadata(path: &Path) -> (u64, u32) {
+    pub fn read_metadata(path: impl AsRef<Path>) -> (u64, u32) {
+        let metadata =
+            std::fs::metadata(path.as_ref()).expect("Could not read the files metadata.");
         let bytes = metadata.len();
         let last_mod = metadata
             .modified()
@@ -107,14 +109,18 @@ impl Movie {
             .expect("Could not convert to timestamp.")
             .as_nanos();
 
-        let hash_input = format!("{}{}{}", bytes, last_mod, &path.display());
+        let hash_input = format!("{}{}{}", bytes, last_mod, path.as_ref().display());
         (bytes, xxh32(hash_input.as_bytes(), 0))
     }
 
-    fn get_title_year(matroska: &Matroska, path: &Path) -> Option<(String, i16)> {
+    fn get_title_year<P>(matroska: &Matroska, path: P) -> Option<(String, i16)>
+    where
+        P: AsRef<Path>,
+    {
         let metadata_title = matroska.info.title.clone().unwrap_or_default();
 
         let parent = path
+            .as_ref()
             .parent()
             .expect("Could not unwrap parent contents.")
             .file_name()
@@ -124,14 +130,14 @@ impl Movie {
         Self::extract_title_year(metadata_title)
             .or_else(|| {
                 Self::extract_title_year(parent).map(|(title, year)| {
-                    Self::mkvinfo_update(&title, year, path);
+                    Self::mkvinfo_update(&title, year, path.as_ref());
                     (title, year)
                 })
             })
             .or_else(|| {
                 println!(
                     "UNABLE TO PARSE TITLE INFO FOR {{ {:?} }}",
-                    &path.file_name().unwrap()
+                    &path.as_ref().file_name().unwrap()
                 );
                 None
             })

@@ -12,7 +12,17 @@ fn main() {
     let mut lib = Library::new("M:/");
 
     // lib.update_ratings("equus497").unwrap_or_default();
-    lib.update_movies();
+    match lib.update_movies() {
+        Ok((new, removed)) => {
+            if new > 0 {
+                println!("Added {new} movies!");
+            }
+            if removed > 0 {
+                println!("Removed {removed} movies!");
+            }
+        }
+        Err(e) => println!("Failed to update movies.\nError: {e}"),
+    }
 
     lib.rename_folders();
 
