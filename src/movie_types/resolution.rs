@@ -38,7 +38,7 @@ impl FromStr for Resolution {
             "SD" => Ok(Resolution::SD),
             "720p" => Ok(Resolution::HD720),
             "1080p" => Ok(Resolution::HD1080),
-            "4K" => Ok(Resolution::UHD4K),
+            "2160p" => Ok(Resolution::UHD4K),
             "8K" => Ok(Resolution::UHD8K),
             _ => Ok(Resolution::Err),
         }
@@ -51,12 +51,25 @@ impl From<&str> for Resolution {
             "SD" => Resolution::SD,
             "720p" => Resolution::HD720,
             "1080p" => Resolution::HD1080,
-            "4K" => Resolution::UHD4K,
+            "2160p" => Resolution::UHD4K,
             "8K" => Resolution::UHD8K,
             _ => Resolution::Err,
         }
     }
 }
+
+// impl ToString for Resolution {
+//     fn to_string(&self) -> String {
+//         match self {
+//             Resolution::SD => String::from("SD"),
+//             Resolution::HD720 => String::from("720p"),
+//             Resolution::HD1080 => String::from("1080p"),
+//             Resolution::UHD4K => String::from("4K"),
+//             Resolution::UHD8K => String::from("8K"),
+//             Resolution::Err => String::from("Err"),
+//         }
+//     }
+// }
 
 impl Display for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -64,7 +77,7 @@ impl Display for Resolution {
             Resolution::SD => write!(f, "SD"),
             Resolution::HD720 => write!(f, "720p"),
             Resolution::HD1080 => write!(f, "1080p"),
-            Resolution::UHD4K => write!(f, "4K"),
+            Resolution::UHD4K => write!(f, "2160p"),
             Resolution::UHD8K => write!(f, "8K"),
             Resolution::Err => write!(f, "Err"),
         }

@@ -1,6 +1,6 @@
 use crate::movie::{AudioStream, Movie, SubtitleStream, VideoStream};
 use rusqlite::{params, Connection, Result};
-use std::{collections::{HashMap, HashSet}, path::PathBuf};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Database {
@@ -67,7 +67,7 @@ impl Database {
                     },
                     hash: row.get("hash")?,
                     size: row.get("size")?,
-                    path: PathBuf::new(),
+                    // path: PathBuf::new(),
                 })
             })?
             .filter_map(Result::ok)
@@ -119,7 +119,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_ratings(&mut self, ratings_table: &HashMap<String, String>) -> rusqlite::Result<()> {
+    pub fn update_ratings_db(&mut self, ratings_table: &HashMap<String, String>) -> rusqlite::Result<()> {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare( 

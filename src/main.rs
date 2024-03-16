@@ -12,9 +12,19 @@ fn main() {
     let mut lib = Library::new("M:/");
 
     // lib.update_ratings("equus497").unwrap_or_default();
-    lib.update_movies()
-        .unwrap_or_else(|e| println!("Error updating movies in database: {e}"));
-    lib.output_to_csv();
+    match lib.update_movies() {
+        Ok((new, removed)) => {
+            if new > 0 {
+                println!("Added {new} movies!");
+            }
+            if removed > 0 {
+                println!("Removed {removed} movies!");
+            }
+        }
+        Err(e) => println!("Failed to update movies.\nError: {e}"),
+    }
+
+    lib.rename_folders();
 
     println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }

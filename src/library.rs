@@ -19,8 +19,8 @@ use walkdir::WalkDir;
 pub struct Library {
     pub db: Database,
     root: String,
-    new: Vec<String>,
-    pub old_collection: HashSet<u32>,
+    // new: Vec<String>,
+    // pub old_collection: HashSet<u32>,
     pub collection: HashMap<u32, Movie>,
     pub ratings: HashMap<String, String>,
 }
@@ -41,31 +41,32 @@ impl Library {
             );
         }
 
-        let old_collection = collection.keys().cloned().collect::<HashSet<u32>>();
-
         Library {
             db,
             root: root.into(),
-            new: vec![],
             ratings,
             collection,
-            old_collection,
         }
     }
 
-    pub fn update_movies(&mut self) -> Result<()> {
-        // For each .mkv in the path_list
-        //  Generate hash, and try to remove it from hashet
-        //  If it cannot be removed:
-        //      Create a new movie instance, and add it to collection
-        // let path_list = Self::_get_dirs(&self.root)[..170].to_vec();
+    // For each .mkv in the path_list
+    //  Generate hash, and try to remove it from hashet
+    //  If it cannot be removed:
+    //      Create a new movie instance, and add it to collection
+    pub fn update_movies(&mut self) -> Result<(usize, usize)> {
+        let mut new = vec![];
+        let mut removed = vec![];
+
+        let mut old_collection = self.collection.keys().cloned().collect::<HashSet<u32>>();
+
         let path_list = Self::_get_dirs(&self.root);
-        let mut m_prog = Prog::new(path_list.len(), "updating moving list");
-        for path in path_list {
-            let (_, hash) = Movie::read_metadata(&path);
-            if !self.old_collection.remove(&hash) {
-                let movie = Movie::new(&path);
-                self.new.push(format!("{} [{}]", &movie.title, &movie.hash));
+        let mut m_prog = Prog::new(path_list.len(), "updating movie list");
+
+        for path in &path_list {
+            let hash = Movie::read_metadata(path).1;
+            if !old_collection.remove(&hash) {
+                let movie = Movie::new(path);
+                new.push((movie.title.clone(), movie.hash));
                 self.collection.insert(hash, movie);
                 m_prog.inc();
             }
@@ -82,44 +83,40 @@ impl Library {
 
         // If there are new movies,
         //  Write movies to database
-        if !self.new.is_empty() {
-            match self.db.bulk_insert(&self.collection) {
-                Ok(()) => {
-                    println!("\nADDED {} MOVIES", self.new.len());
-
-                    if self.new.len() < 20 {
-                        self.new.iter().for_each(|m| println!("\t{}", m));
-                    }
-                }
-                Err(e) => eprintln!("Error inserting movies into database.\nError: {e}"),
+        if !new.is_empty() {
+            if let Err(e) = self.db.bulk_insert(&self.collection) {
+                eprintln!("Error inserting movies into database.\nError: {e}")
             }
         }
 
         // If any leftover values in `old_collection`
         //  Remove them from the database
-        if !self.old_collection.is_empty() {
-            println!("\nREMOVED {} MOVIES", self.old_collection.len());
-
-            match self.old_collection.len() <= 15 {
-                true => self.old_collection.iter().for_each(|bad_hash| {
-                    if let Some(m) = self.collection.remove(bad_hash) {
-                        println!("\t{} [{:x}]", m.title, m.hash);
-                    }
-                }),
-                false => self.old_collection.iter().for_each(|bad_hash| {
-                    self.collection.remove(bad_hash);
-                }),
-            }
-            self.db.bulk_removal(&self.old_collection)?;
+        // if !old_collection.is_empty() {
+        if !old_collection.is_empty() {
+            old_collection.iter().for_each(|bad_hash| {
+                if let Some(m) = self.collection.remove(bad_hash) {
+                    removed.push((m.title.clone(), m.hash));
+                }
+            });
+            self.db.bulk_removal(&old_collection)?;
         }
-        Ok(())
+
+        let zip = new.iter().zip(removed.iter());
+
+        for (n, r) in zip {
+            if n.0 == r.0 {
+                println!(" ++ UPDATED: {}", n.0);
+            }
+        }
+
+        Ok((new.len(), old_collection.len()))
     }
 
     /// Given a `user_name` (String) from letterboxd, scrape ratings and store in database
     pub fn update_ratings(&mut self, user_name: &str) -> Result<()> {
         let ratings = Self::retrieve_ratings(user_name);
 
-        match self.db.update_ratings(&ratings) {
+        match self.db.update_ratings_db(&ratings) {
             Ok(_) => {
                 println!("ADDED {} RATINGS!", ratings.len());
                 self.ratings = ratings;
@@ -233,8 +230,11 @@ impl Library {
     }
 }
 
+/////////////////////////////
+// External Functionality
+/////////////////////////////
 impl Library {
-    pub fn output_to_csv(self) {
+    pub fn output_to_csv(&self) {
         // let mut wtr = csv::Writer::from_writer(io::stout());
         let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
 
@@ -265,13 +265,13 @@ impl Library {
                 &m.rating,
                 &m.duration,
                 format!("{:.2}", m.size),
-                &m.video.resolution,
+                &m.video.resolution.to_string(),
                 &m.video.codec,
-                &m.video.bit_depth,
-                &m.audio.codec,
+                &m.video.bit_depth.to_string(),
+                &m.audio.codec.to_string(),
                 &m.audio.channels,
                 &m.subs.format,
-                &m.hash,
+                format!("{:x}", &m.hash),
                 &m.audio.count,
                 &m.subs.count,
             ))
@@ -279,6 +279,68 @@ impl Library {
             csv_prog.inc();
         });
         csv_prog.end();
+    }
+
+    pub fn rename_folders(&mut self) {
+        let mut old_hashes = HashSet::new();
+
+        for path in &Self::_get_dirs(&self.root) {
+            let hash = Movie::read_metadata(path).1;
+
+            if let Some(m) = self.collection.get(&hash) {
+                let old_name = path.parent().unwrap();
+                let file_name = path.file_name().unwrap();
+
+                let new_name = self.get_new_name(m);
+
+                if new_name != old_name {
+                    old_hashes.insert(hash);
+                    let mut m = self.collection.remove(&hash).unwrap();
+
+                    std::fs::rename(old_name, &new_name).unwrap_or_else(|e| {
+                        println!("Error writing to {:?}\nError: {e}", &new_name)
+                    });
+
+                    let new_path = &new_name.join(file_name);
+                    let new_hash = Movie::read_metadata(new_path).1;
+                    m.hash = new_hash;
+                    self.collection.insert(new_hash, m);
+
+                    println!("\t\t{}\n\t==>\t{}", old_name.display(), new_name.display(),)
+                }
+            }
+        }
+
+        if !old_hashes.is_empty() {
+            println!("Renamed {} paths!", old_hashes.len());
+            self.db
+                .bulk_removal(&old_hashes)
+                .unwrap_or_else(|e| println!("Could not remove old instances from database! {e}"));
+
+            self.db
+                .bulk_insert(&self.collection)
+                .unwrap_or_else(|e| println!("Could not update database! {e}"));
+        }
+    }
+
+    fn get_new_name(&self, m: &Movie) -> PathBuf {
+        let new_path = format!(
+            "{}{} ({}) [{} {} {} {:?}-{}] ({:.2} GB)",
+            self.root,
+            m.title,
+            m.year,
+            m.video.resolution,
+            m.video.codec,
+            m.video.bit_depth,
+            m.audio.codec,
+            match m.audio.channels {
+                ch if ch < 1.5 => "mono".to_string(),
+                ch if ch < 2.5 => "stereo".to_string(),
+                x => format!("{}", &x),
+            },
+            m.size
+        );
+        PathBuf::from(new_path)
     }
 }
 

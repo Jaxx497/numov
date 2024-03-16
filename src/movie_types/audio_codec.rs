@@ -28,7 +28,7 @@ impl From<&str> for AudioCodec {
             "EAC3" => AudioCodec::EAC3,
             "FLAC" => AudioCodec::FLAC,
             "OPUS" => AudioCodec::OPUS,
-            "PCM" => AudioCodec::PCM,
+            "PCM" | "PCM/INT/LIT" => AudioCodec::PCM,
             "Atmos" | "TRUEHD" => AudioCodec::Atmos,
             _ => {
                 let other = s

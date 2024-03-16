@@ -50,7 +50,7 @@ pub struct Movie {
     pub audio: AudioStream,
     pub subs: SubtitleStream,
     pub hash: u32,
-    pub path: PathBuf,
+    // pub path: PathBuf,
 }
 
 impl Movie {
@@ -77,7 +77,7 @@ impl Movie {
             subs,
             hash,
             size,
-            path: path.to_owned(),
+            // path: path.to_owned(),
         }
     }
 
