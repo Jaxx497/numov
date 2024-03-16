@@ -101,6 +101,7 @@ impl Movie {
     pub fn read_metadata(path: impl AsRef<Path>) -> (u64, u32) {
         let metadata =
             std::fs::metadata(path.as_ref()).expect("Could not read the files metadata.");
+
         let bytes = metadata.len();
         let last_mod = metadata
             .modified()

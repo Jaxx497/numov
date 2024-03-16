@@ -12,15 +12,13 @@ use std::{
     time::Instant,
     u32,
 };
-use strsim::jaro_winkler;
 use walkdir::WalkDir;
 
 #[derive(Debug)]
 pub struct Library {
     pub db: Database,
     root: String,
-    // new: Vec<String>,
-    // pub old_collection: HashSet<u32>,
+    pub legacy_collection: HashSet<u32>,
     pub collection: HashMap<u32, Movie>,
     pub ratings: HashMap<String, String>,
 }
@@ -32,7 +30,7 @@ impl Library {
             std::process::exit(1);
         });
 
-        let (collection, ratings) = db.fetch_all();
+        let (collection, ratings) = db.fetch();
         if !collection.is_empty() || !ratings.is_empty() {
             println!(
                 "Read in {} movies and {} ratings from database.",
@@ -40,12 +38,14 @@ impl Library {
                 ratings.len()
             );
         }
+        let legacy_collection = collection.keys().cloned().collect::<HashSet<u32>>();
 
         Library {
             db,
             root: root.into(),
             ratings,
             collection,
+            legacy_collection,
         }
     }
 
@@ -54,67 +54,43 @@ impl Library {
     //  If it cannot be removed:
     //      Create a new movie instance, and add it to collection
     pub fn update_movies(&mut self) -> Result<()> {
-        let mut old_collection = self.collection.keys().cloned().collect::<HashSet<u32>>();
-        let mut new = vec![];
-
+        self.legacy_collection = self.collection.keys().cloned().collect();
+        let mut logger: HashMap<String, MovieStatus> = HashMap::new();
         let path_list = Self::_get_dirs(&self.root);
 
-        for path in &path_list[..40].to_vec() {
+        let mut main_prog = Prog::new(path_list.len(), "updated library");
+        for path in &path_list {
             let hash = Movie::read_metadata(path).1;
-            if !old_collection.remove(&hash) {
+            if !self.legacy_collection.remove(&hash) {
                 let movie = Movie::new(path);
-                new.push(format!("{} ({})", movie.title.to_owned(), movie.year));
+                logger.insert(
+                    format!("{} ({})", movie.title.to_owned(), movie.year),
+                    MovieStatus::New,
+                );
                 self.collection.insert(hash, movie);
             }
+            main_prog.inc();
         }
+        main_prog.end();
 
-        // If data is in the `ratings` table, map ratings to collection items
-        if !self.ratings.is_empty() {
-            match self.map_ratings() {
-                Ok(n) => println!("Successfully mapped ratings to {n} movies."),
-                Err(e) => println!("Error mapping ratings to movies. {e}"),
-            }
-        }
+        self.map_ratings();
 
-        // If there are new movies,
-        //  Write movies to database
-        if !new.is_empty() {
-            if let Err(e) = self.db.bulk_insert(&self.collection) {
-                eprintln!("Error inserting movies into database.\nError: {e}")
-            }
-        }
-
-        let mut logger: HashMap<String, ItemStatus> = new
-            .into_iter()
-            .map(|title| (title, ItemStatus::New))
-            .collect();
-        // If any leftover values in `old_collection`
-        //  Remove them from the database
-        // if !old_collection.is_empty() {
-        let mut removed = vec![];
-        if !old_collection.is_empty() {
-            old_collection.iter().for_each(|bad_hash| {
-                if let Some(m) = self.collection.remove(bad_hash) {
-                    removed.push(format!("{} ({})", m.title.to_owned(), m.year));
-                }
-            });
-            self.db.bulk_removal(&old_collection)?;
-        }
-
-        removed.into_iter().for_each(|title| {
-            logger
-                .entry(title)
-                .and_modify(|t| *t = ItemStatus::Updated)
-                .or_insert(ItemStatus::Removed);
+        self.legacy_collection.iter().for_each(|bad_hash| {
+            if let Some(m) = self.collection.remove(bad_hash) {
+                logger
+                    .entry(format!("{} ({})", m.title.to_owned(), m.year))
+                    .and_modify(|t| *t = MovieStatus::Updated)
+                    .or_insert(MovieStatus::Removed);
+            };
         });
 
-        for (k, v) in logger {
-            match v {
-                ItemStatus::New => println!("++ {k}"),
-                ItemStatus::Updated => println!("** {k}"),
-                ItemStatus::Removed => println!("-- {k}"),
-            }
+        if !logger.is_empty() {
+            println!("Entering insertion mode");
+            self.db
+                .update_movie_table(&self.collection, &self.legacy_collection)
+                .unwrap_or_else(|e| println!("Failed to update the database.\nError: {e}"));
         }
+        Self::log_changes(logger);
 
         Ok(())
     }
@@ -123,7 +99,7 @@ impl Library {
     pub fn update_ratings(&mut self, user_name: &str) -> Result<()> {
         let ratings = Self::retrieve_ratings(user_name);
 
-        match self.db.update_ratings_db(&ratings) {
+        match self.db.update_ratings_table(&ratings) {
             Ok(_) => {
                 println!("ADDED {} RATINGS!", ratings.len());
                 self.ratings = ratings;
@@ -132,46 +108,11 @@ impl Library {
         };
         Ok(())
     }
-
-    pub fn map_ratings(&mut self) -> Result<i32> {
-        let mut count = 0;
-        for movie in self.collection.values_mut() {
-            let mut best_match = (0.0, None);
-
-            for (rating_title, rating_value) in &self.ratings {
-                let similarity = jaro_winkler(&movie.title, rating_title);
-
-                if similarity > best_match.0 {
-                    best_match = (similarity, Some(rating_value.clone()))
-                }
-            }
-            if best_match.0 >= 0.85 {
-                count += 1;
-                movie.rating = best_match.1;
-            }
-        }
-        Ok(count)
-    }
-
-    pub fn _get_dirs(root: impl AsRef<str>) -> Vec<PathBuf> {
-        WalkDir::new(root.as_ref())
-            .max_depth(2)
-            .into_iter()
-            .filter_map(|file| {
-                file.ok().and_then(
-                    |entry| match entry.path().to_string_lossy().ends_with("mkv") {
-                        true => Some(entry.path().to_owned()),
-                        false => None,
-                    },
-                )
-            })
-            .collect()
-    }
 }
 
-// =====================
+// ==================
 // RATINGS RELATED
-// =====================
+// ==================
 impl Library {
     fn retrieve_ratings(user_name: impl AsRef<str>) -> HashMap<String, String> {
         let url = format! {"https://letterboxd.com/{}/films/", user_name.as_ref()};
@@ -236,14 +177,12 @@ impl Library {
     }
 }
 
-/////////////////////////////
+// =========================
 // External Functionality
-/////////////////////////////
+// =========================
 impl Library {
     pub fn output_to_csv(&self) {
-        // let mut wtr = csv::Writer::from_writer(io::stout());
         let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
-
         let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
 
         wtr.serialize([
@@ -295,9 +234,8 @@ impl Library {
 
             if let Some(m) = self.collection.get(&hash) {
                 let old_name = path.parent().unwrap();
-                let file_name = path.file_name().unwrap();
-
                 let new_name = self.get_new_name(m);
+                let file_name = path.file_name().unwrap();
 
                 if new_name != old_name {
                     old_hashes.insert(hash);
@@ -312,20 +250,21 @@ impl Library {
                     m.hash = new_hash;
                     self.collection.insert(new_hash, m);
 
-                    println!("\t\t{}\n\t==>\t{}", old_name.display(), new_name.display(),)
+                    println!(
+                        "\n\t\t{}\n\t\t==>\t{}",
+                        old_name.display(),
+                        new_name.display(),
+                    )
                 }
             }
         }
 
         if !old_hashes.is_empty() {
-            println!("Renamed {} paths!", old_hashes.len());
-            self.db
-                .bulk_removal(&old_hashes)
-                .unwrap_or_else(|e| println!("Could not remove old instances from database! {e}"));
+            println!("\nRenamed {} paths!", old_hashes.len());
 
             self.db
-                .bulk_insert(&self.collection)
-                .unwrap_or_else(|e| println!("Could not update database! {e}"));
+                .update_movie_table(&self.collection, &old_hashes)
+                .unwrap_or_else(|e| println!("Failed to update the database.\nError: {e}"));
         }
     }
 
@@ -348,6 +287,84 @@ impl Library {
         );
         PathBuf::from(new_path)
     }
+}
+
+// =================
+// Private Stuff
+// =================
+impl Library {
+    fn _get_dirs(root: impl AsRef<str>) -> Vec<PathBuf> {
+        WalkDir::new(root.as_ref())
+            .max_depth(2)
+            .into_iter()
+            .filter_map(|file| {
+                file.ok().and_then(
+                    |entry| match entry.path().to_string_lossy().ends_with("mkv") {
+                        true => Some(entry.path().to_owned()),
+                        false => None,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn map_ratings(&mut self) {
+        let mut count = 0;
+        for movie in self.collection.values_mut() {
+            let mut best_match = (0.8, None);
+
+            for (rating_title, rating_value) in &self.ratings {
+                let similarity = strsim::jaro_winkler(&movie.title, rating_title);
+
+                if similarity > best_match.0 {
+                    best_match = (similarity, Some(rating_value.clone()))
+                }
+            }
+            if best_match.0 > 0.84 {
+                movie.rating = best_match.1;
+                count += 1;
+            }
+        }
+        if count > 0 {
+            println!("Successfully mapped ratings to {count} movies.")
+        }
+    }
+
+    fn log_changes(logger: HashMap<String, MovieStatus>) {
+        let mut log = vec![vec![], vec![], vec![]];
+        for (k, v) in logger {
+            match v {
+                MovieStatus::New => log[0].push(k),
+                MovieStatus::Updated => log[1].push(k),
+                MovieStatus::Removed => log[2].push(k),
+            }
+        }
+
+        if !log[0].is_empty() || !log[1].is_empty() || !log[2].is_empty() {
+            println!(
+                "\nADDED {} | UPDATED {} | REMOVED {}",
+                log[0].len(),
+                log[1].len(),
+                log[2].len()
+            );
+        }
+
+        for (i, m) in ["++", "**", "--"].into_iter().enumerate() {
+            if !log[i].is_empty() {
+                match log[i].len() {
+                    t if t < 15 => log[i].iter().for_each(|title| println!("\t{m} {title}")),
+                    _ => println!("\t{}", log[i].join("  |  ")),
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum MovieStatus {
+    New,
+    Removed,
+    Updated,
 }
 
 struct Prog {
@@ -378,11 +395,4 @@ impl Prog {
         self.pb.finish_println(&output);
         println!();
     }
-}
-
-#[derive(Debug)]
-enum ItemStatus {
-    New,
-    Removed,
-    Updated,
 }
