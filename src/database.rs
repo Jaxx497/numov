@@ -4,20 +4,20 @@ use std::{collections::{HashMap, HashSet}, path::PathBuf};
 
 #[derive(Debug)]
 pub struct Database {
-    // db_loc: PathBuf,
     pub conn: Connection,
 }
 
 impl Database {
-    pub fn new() -> Result<Self> {
+    pub fn open() -> Result<Self> {
         
-        // let db_path = dirs::config_dir().unwrap().join("numov");
-        // if std::fs::metadata(&db_path).is_err() {
-        //     std::fs::create_dir(&db_path).unwrap();
-        // }
+        let db_path = dirs::config_dir().unwrap().join("numov");
+        if std::fs::metadata(&db_path).is_err() {
+            std::fs::create_dir(&db_path).unwrap();
+        }
         //
-        // let conn = Connection::open(db_path.join("data.db")).unwrap_or_else(|e| {println!("{e}"); 
-        let conn = Connection::open("numov.db")?;
+        let conn = Connection::open(db_path.join("data.db"))?;
+        // let conn = Connection::open(db_path.join("data.db")).unwrap_or_else(|e| println!("{}", e));
+        // let conn = Connection::open("numov.db")?;
         // let x = PathBuf::from(conn.path().unwrap());
 
         conn.execute(

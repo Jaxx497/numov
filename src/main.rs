@@ -9,54 +9,55 @@ use library::Library;
 use std::{path::PathBuf, time::Instant};
 
 fn main() {
+    let t1 = Instant::now();
     let args = Args::parse();
-    println!("{:?}", args);
 
-    // let lib = if let Some(root) = args.root {
-    //     if PathBuf::from(&root).is_dir() {
-    //         Library::new(root)
-    //     } else {
-    //         eprintln!("Error: Invalid root directory specified.");
-    //         std::process::exit(1);
-    //     }
-    // } else {
-    //     eprintln!("Error: Invalid root directory specified.");
-    //     std::process::exit(1);
-    // };
+    let mut lib = Library::new("");
 
-    // let t1 = Instant::now();
-    //
-    // let mut lib = Library::new("M:/");
-    //
-    // lib.update_ratings("equus497").unwrap_or_default();
-    // lib.update_movies();
-    //
-    // lib.rename_folders();
-    //
-    // println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
+    if let Some(user) = args.lb_username {
+        lib.update_ratings(&user)
+            .unwrap_or_else(|e| println!("Error parsing ratings: {e}"));
+    }
+
+    match args.path {
+        Some(root) if PathBuf::from(&root).is_dir() => {
+            lib.root = root;
+            lib.update_movies().ok();
+            if args.rename {
+                lib.rename_folders();
+            }
+        }
+        _ => (),
+    };
+
+    if args.csv {
+        lib.output_to_csv();
+    }
+
+    println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about)]
 struct Args {
-    /// Root directory of movie library
+    /// Updated database with movies from PATH
     #[arg(short, long)]
-    root: Option<String>,
+    path: Option<String>,
 
-    /// Letterboxd User we will try to scrape
+    /// Letterboxd user ratings to scrape
     #[arg(short, long = "letterboxd")]
-    lb_user: Option<String>,
+    lb_username: Option<String>,
 
-    /// Output data in a given format
-    #[arg(short, long, value_enum)]
-    output: Option<Output>,
-
+    /// Output movie data as a csv file
     #[arg(long, action = clap::ArgAction::SetTrue)]
     csv: bool,
-    #[arg(long,  action = clap::ArgAction::SetTrue)]
-    json: bool,
-    #[arg(long = "df", action = clap::ArgAction::SetTrue)]
-    df: bool,
+
+    /// Rename folders
+    #[arg(short = 'R', long = "rename", action = clap::ArgAction::SetTrue)]
+    rename: bool,
+    // /// Output movie data as a dataframe
+    // #[arg(long = "df", action = clap::ArgAction::SetTrue)]
+    // df: bool,
 }
 
 #[derive(Clone, Debug, ValueEnum)]

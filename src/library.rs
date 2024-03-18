@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 #[derive(Debug)]
 pub struct Library {
     pub db: Database,
-    root: String,
+    pub root: String,
     pub legacy_collection: HashSet<u32>,
     pub collection: HashMap<u32, Movie>,
     pub ratings: HashMap<String, String>,
@@ -25,7 +25,7 @@ pub struct Library {
 
 impl Library {
     pub fn new(root: impl Into<String>) -> Self {
-        let db = Database::new().unwrap_or_else(|e| {
+        let db = Database::open().unwrap_or_else(|e| {
             eprintln!("Could not make database!\nError: {e}");
             std::process::exit(1);
         });
@@ -54,7 +54,12 @@ impl Library {
     //  If it cannot be removed:
     //      Create a new movie instance, and add it to collection
     pub fn update_movies(&mut self) -> Result<()> {
-        self.legacy_collection = self.collection.keys().cloned().collect();
+        if !PathBuf::from(&self.root).is_dir() {
+            println!("Improper path provided.");
+            return Ok(());
+        }
+
+        // self.legacy_collection = self.collection.keys().cloned().collect();
         let mut logger: HashMap<String, MovieStatus> = HashMap::new();
         let path_list = Self::_get_dirs(&self.root);
 
@@ -64,7 +69,7 @@ impl Library {
             if !self.legacy_collection.remove(&hash) {
                 let movie = Movie::new(path);
                 logger.insert(
-                    format!("{} ({})", movie.title.to_owned(), movie.year),
+                    format!("{} ({})", &movie.title, movie.year),
                     MovieStatus::New,
                 );
                 self.collection.insert(hash, movie);
@@ -78,14 +83,13 @@ impl Library {
         self.legacy_collection.iter().for_each(|bad_hash| {
             if let Some(m) = self.collection.remove(bad_hash) {
                 logger
-                    .entry(format!("{} ({})", m.title.to_owned(), m.year))
+                    .entry(format!("{} ({})", &m.title, m.year))
                     .and_modify(|t| *t = MovieStatus::Updated)
                     .or_insert(MovieStatus::Removed);
             };
         });
 
         if !logger.is_empty() {
-            println!("Entering insertion mode");
             self.db
                 .update_movie_table(&self.collection, &self.legacy_collection)
                 .unwrap_or_else(|e| println!("Failed to update the database.\nError: {e}"));
@@ -96,8 +100,8 @@ impl Library {
     }
 
     /// Given a `user_name` (String) from letterboxd, scrape ratings and store in database
-    pub fn update_ratings(&mut self, user_name: &str) -> Result<()> {
-        let ratings = Self::retrieve_ratings(user_name);
+    pub fn update_ratings(&mut self, user_name: &impl AsRef<str>) -> Result<()> {
+        let ratings = Self::retrieve_ratings(user_name.as_ref());
 
         match self.db.update_ratings_table(&ratings) {
             Ok(_) => {

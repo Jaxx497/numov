@@ -77,7 +77,6 @@ impl Movie {
             subs,
             hash,
             size,
-            // path: path.to_owned(),
         }
     }
 
@@ -156,7 +155,7 @@ impl Movie {
         let formatted_title = format!("title={} ({year})", title.as_ref());
 
         let output = std::process::Command::new("mkvpropedit")
-            .arg(path.to_str().unwrap())
+            .arg(path.to_string_lossy().as_ref())
             .arg("--tags")
             .arg("all:")
             .arg("--edit")
