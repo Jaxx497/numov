@@ -1,6 +1,6 @@
 use crate::movie::{AudioStream, Movie, SubtitleStream, VideoStream};
 use rusqlite::{params, Connection, Result};
-use std::{collections::{HashMap, HashSet}, path::PathBuf};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Database {
@@ -103,7 +103,6 @@ impl Database {
     }
 }
 
-
 // ===============
 //   Fetch Data -> Fetch directly from database
 // ===============
@@ -163,5 +162,17 @@ impl Database {
             .collect::<HashMap<u32, Movie>>();
 
         Ok(existing)
+    }
+}
+
+pub fn delete_db() {
+    let db_path = dirs::config_dir().unwrap().join("numov/data.db");
+        if std::fs::metadata(&db_path).is_ok() {
+            match std::fs::remove_file(db_path) {
+                Ok(_) => println!("Successfully deleted database!"),
+                Err(e) => println!("Unable to delete database: {e}"),
+        };
+    } else {
+        println!("Database file not found.");
     }
 }

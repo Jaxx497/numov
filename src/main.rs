@@ -6,11 +6,26 @@ mod movie_types;
 use clap::Parser;
 use clap::ValueEnum;
 use library::Library;
+use std::io;
+use std::io::Write;
 use std::{path::PathBuf, time::Instant};
 
 fn main() {
     let t1 = Instant::now();
     let args = Args::parse();
+
+    if args.reset {
+        print!("If you wish to completely reset the database, type \'KILL IT\' (without the quotes) » ");
+        let _ = io::stdout().flush();
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_ok() && input.trim() == "KILL IT" {
+            database::delete_db();
+            std::process::exit(0);
+        } else {
+            println!("Database was not deleted. Exiting program.");
+            std::process::exit(0);
+        }
+    }
 
     let mut lib = Library::new("");
 
@@ -34,27 +49,35 @@ fn main() {
         lib.output_to_csv();
     }
 
+    lib.db
+        .conn
+        .close()
+        .unwrap_or_else(|(_, e)| println!("Could not close database: {e}"));
+
     println!("\nCompleted all tasks in {:.4?}", Instant::now() - t1);
 }
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about)]
 struct Args {
-    /// Updated database with movies from PATH
-    #[arg(short, long)]
+    /// Path to read movies from
+    #[arg(short = 'P', long)]
     path: Option<String>,
 
     /// Letterboxd user ratings to scrape
-    #[arg(short, long = "letterboxd")]
+    #[arg(short = 'L', long = "letterboxd")]
     lb_username: Option<String>,
-
-    /// Output movie data as a csv file
-    #[arg(long, action = clap::ArgAction::SetTrue)]
-    csv: bool,
 
     /// Rename folders
     #[arg(short = 'R', long = "rename", action = clap::ArgAction::SetTrue)]
     rename: bool,
+
+    /// Output movie data as a csv file
+    #[arg(short = 'C', long, action = clap::ArgAction::SetTrue)]
+    csv: bool,
+    /// Reset database
+    #[arg(long, action = clap::ArgAction::SetTrue)]
+    reset: bool,
     // /// Output movie data as a dataframe
     // #[arg(long = "df", action = clap::ArgAction::SetTrue)]
     // df: bool,
