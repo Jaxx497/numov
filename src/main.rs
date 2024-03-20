@@ -27,7 +27,7 @@ fn main() {
         }
     }
 
-    let mut lib = Library::new("");
+    let mut lib = Library::new(PathBuf::new());
 
     if let Some(user) = args.lb_username {
         lib.update_ratings(&user)
@@ -36,7 +36,10 @@ fn main() {
 
     match args.path {
         Some(root) if PathBuf::from(&root).is_dir() => {
-            lib.root = root;
+            lib.root = PathBuf::from(&root)
+                .canonicalize()
+                .unwrap_or_else(|_| PathBuf::from(&root));
+
             lib.update_movies().ok();
             if args.rename {
                 lib.rename_folders();

@@ -17,14 +17,14 @@ use walkdir::WalkDir;
 #[derive(Debug)]
 pub struct Library {
     pub db: Database,
-    pub root: String,
+    pub root: PathBuf,
     pub legacy_collection: HashSet<u32>,
     pub collection: HashMap<u32, Movie>,
     pub ratings: HashMap<String, String>,
 }
 
 impl Library {
-    pub fn new(root: impl Into<String>) -> Self {
+    pub fn new(root: PathBuf) -> Self {
         let db = Database::open().unwrap_or_else(|e| {
             eprintln!("Could not make database!\nError: {e}");
             std::process::exit(1);
@@ -42,7 +42,7 @@ impl Library {
 
         Library {
             db,
-            root: root.into(),
+            root,
             ratings,
             collection,
             legacy_collection,
@@ -275,7 +275,7 @@ impl Library {
     fn get_new_name(&self, m: &Movie) -> PathBuf {
         let new_path = format!(
             "{}{} ({}) [{} {} {} {:?}-{}] ({:.2} GB)",
-            self.root,
+            self.root.to_string_lossy(),
             m.title,
             m.year,
             m.video.resolution,
@@ -297,8 +297,8 @@ impl Library {
 // Private Stuff
 // =================
 impl Library {
-    fn _get_dirs(root: impl AsRef<str>) -> Vec<PathBuf> {
-        WalkDir::new(root.as_ref())
+    fn _get_dirs(root: &PathBuf) -> Vec<PathBuf> {
+        WalkDir::new(root)
             .max_depth(2)
             .into_iter()
             .filter_map(|file| {
