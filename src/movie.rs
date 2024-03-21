@@ -50,7 +50,6 @@ pub struct Movie {
     pub audio: AudioStream,
     pub subs: SubtitleStream,
     pub hash: u32,
-    // pub path: PathBuf,
 }
 
 impl Movie {
@@ -109,7 +108,7 @@ impl Movie {
             .expect("Could not convert to timestamp.")
             .as_nanos();
 
-        let hash_input = format!("{}{}{}", bytes, last_mod, path.as_ref().display());
+        let hash_input = format!("{}{}{}", bytes, last_mod, &path.as_ref().display());
         (bytes, xxh32(hash_input.as_bytes(), 0))
     }
 

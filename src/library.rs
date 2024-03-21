@@ -18,9 +18,9 @@ use walkdir::WalkDir;
 pub struct Library {
     pub db: Database,
     pub root: PathBuf,
-    pub legacy_collection: HashSet<u32>,
-    pub collection: HashMap<u32, Movie>,
-    pub ratings: HashMap<String, String>,
+    legacy_collection: HashSet<u32>,
+    collection: HashMap<u32, Movie>,
+    ratings: HashMap<String, String>,
 }
 
 impl Library {
@@ -185,6 +185,12 @@ impl Library {
 // External Functionality
 // =========================
 impl Library {
+    /// Builds a csv file, with each row representing a movie
+    /// and each column representing an aspect.
+    /// Outputs to directory program was run from
+    ///
+    /// Considering rebuiding this function once movie
+    /// attributes are made private
     pub fn output_to_csv(&self) {
         let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
         let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
@@ -230,6 +236,7 @@ impl Library {
         csv_prog.end();
     }
 
+    /// Renames folders based on format determined in get_new_name()
     pub fn rename_folders(&mut self) {
         let mut old_hashes = HashSet::new();
 
@@ -272,6 +279,7 @@ impl Library {
         }
     }
 
+    /// Creates a new path name for file
     fn get_new_name(&self, m: &Movie) -> PathBuf {
         let new_path = format!(
             "{}{} ({}) [{} {} {} {:?}-{}] ({:.2} GB)",
@@ -297,18 +305,14 @@ impl Library {
 // Private Stuff
 // =================
 impl Library {
+    /// Simple walk to find .mkv files provided a root (operates at a depth of 2 to follow a root/dir/file structure)
     fn _get_dirs(root: &PathBuf) -> Vec<PathBuf> {
         WalkDir::new(root)
             .max_depth(2)
             .into_iter()
-            .filter_map(|file| {
-                file.ok().and_then(
-                    |entry| match entry.path().to_string_lossy().ends_with("mkv") {
-                        true => Some(entry.path().to_owned()),
-                        false => None,
-                    },
-                )
-            })
+            .filter_map(|f| f.ok())
+            .filter(|p| p.path().extension().map_or(false, |ext| ext == "mkv"))
+            .map(|e| e.into_path())
             .collect()
     }
 

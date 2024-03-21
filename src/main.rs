@@ -52,6 +52,8 @@ fn main() {
         lib.output_to_csv();
     }
 
+    // Getting library to close from within the library crate
+    // has proven to be very difficult
     lib.db
         .conn
         .close()
