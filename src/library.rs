@@ -263,8 +263,8 @@ impl Library {
 
                     println!(
                         "\n\t\t{}\n\t\t==>\t{}",
-                        old_name.display(),
-                        new_name.display(),
+                        old_name.file_name().unwrap().to_string_lossy(),
+                        new_name.file_name().unwrap().to_string_lossy(),
                     )
                 }
             }
@@ -282,8 +282,7 @@ impl Library {
     /// Creates a new path name for file
     fn get_new_name(&self, m: &Movie) -> PathBuf {
         let new_path = format!(
-            "{}{} ({}) [{} {} {} {:?}-{}] ({:.2} GB)",
-            self.root.to_string_lossy(),
+            "{} ({}) [{} {} {} {:?}-{}] ({:.2} GB)",
             m.title,
             m.year,
             m.video.resolution,
@@ -297,7 +296,7 @@ impl Library {
             },
             m.size
         );
-        PathBuf::from(new_path)
+        PathBuf::from(&self.root).join(new_path)
     }
 }
 
