@@ -191,60 +191,18 @@ impl Library {
     ///
     /// Considering rebuiding this function once movie
     /// attributes are made private
+    //
+    // TODO - Consider reimplementing with the csv crate
     pub fn output_to_csv(&self) {
         let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
-                + self
+                + &self
                     .collection
                     .values()
                     .map(|m| m.make_lines())
                     .collect::<Vec<_>>()
-                    .join("\n")
-                    .as_str();
+                    .join("\n");
 
         std::fs::write("m_log.csv", output_str).unwrap_or_else(|e| println!("{e}"));
-
-        // let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
-        // let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
-        //
-        // wtr.serialize([
-        //     "Title",
-        //     "Year",
-        //     "Rating",
-        //     "Duration",
-        //     "Size",
-        //     "Resolution",
-        //     "V_Coec",
-        //     "Bit_depth",
-        //     "A_Codec",
-        //     "Channels",
-        //     "Sub_Format",
-        //     "Hash",
-        //     "Audio #",
-        //     "Sub #",
-        // ])
-        // .ok();
-        //
-        // self.collection.values().for_each(|m| {
-        //     wtr.serialize((
-        //         &m.title,
-        //         &m.year,
-        //         &m.rating,
-        //         &m.duration,
-        //         format!("{:.2}", m.size),
-        //         &m.video.resolution.to_string(),
-        //         &m.video.codec,
-        //         &m.video.bit_depth.to_string(),
-        //         &m.audio.codec.to_string(),
-        //         &m.audio.channels,
-        //         &m.subs.format,
-        //         format!("{:x}", &m.hash),
-        //         &m.audio.count,
-        //         &m.subs.count,
-        //     ))
-        //     .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
-        //     csv_prog.inc();
-        // });
-        // csv_prog.end();
     }
 
     /// Renames folders based on format determined in get_new_name()
@@ -414,3 +372,52 @@ impl Prog {
         println!();
     }
 }
+
+// OLD CSV IMPLEMENTATION
+// Removed to cut down on external crates
+// impl Library {
+//     pub fn output_to_csv() {
+//         let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
+//         let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
+//
+//         wtr.serialize([
+//             "Title",
+//             "Year",
+//             "Rating",
+//             "Duration",
+//             "Size",
+//             "Resolution",
+//             "V_Coec",
+//             "Bit_depth",
+//             "A_Codec",
+//             "Channels",
+//             "Sub_Format",
+//             "Hash",
+//             "Audio #",
+//             "Sub #",
+//         ])
+//         .ok();
+//
+//         self.collection.values().for_each(|m| {
+//             wtr.serialize((
+//                 &m.title,
+//                 &m.year,
+//                 &m.rating,
+//                 &m.duration,
+//                 format!("{:.2}", m.size),
+//                 &m.video.resolution.to_string(),
+//                 &m.video.codec,
+//                 &m.video.bit_depth.to_string(),
+//                 &m.audio.codec.to_string(),
+//                 &m.audio.channels,
+//                 &m.subs.format,
+//                 format!("{:x}", &m.hash),
+//                 &m.audio.count,
+//                 &m.subs.count,
+//             ))
+//             .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
+//             csv_prog.inc();
+//         });
+//         csv_prog.end();
+//     }
+// }

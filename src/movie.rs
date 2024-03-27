@@ -10,36 +10,39 @@ use matroska::{
     Track, Tracktype,
 };
 use regex::Regex;
-use serde::Serialize;
-use std::fmt::{Display, Formatter, Result};
+// use serde::Serialize;
 use std::path::Path;
+use std::{
+    borrow::Cow,
+    fmt::{Display, Formatter, Result},
+};
 use xxhash_rust::const_xxh32::xxh32;
 
 lazy_static! {
     static ref RE: Regex = Regex::new(r"(?P<title>.*) \((?P<year>\d{4})\)").unwrap();
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct VideoStream {
     pub resolution: Resolution,
     pub codec: VideoCodec,
     pub bit_depth: BitDepth,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct AudioStream {
     pub codec: AudioCodec,
     pub channels: f32,
     pub count: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct SubtitleStream {
     pub format: SubtitleFormat,
     pub count: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Movie {
     pub title: String,
     pub year: i16,
@@ -269,13 +272,13 @@ impl Display for Movie {
 }
 
 impl Movie {
-    pub fn make_lines(&self) -> String {
+    pub fn make_lines(&self) -> Cow<str> {
         let rating = match self.rating.as_ref() {
             Some(s) => s.as_str(),
             _ => "",
         };
 
-        format!(
+        Cow::from(format!(
             "{},{},{},{},{:.2},{},{},{},{},{},{},{:x},{},{}",
             &self.title.replace(',', ""),
             &self.year,
@@ -291,6 +294,6 @@ impl Movie {
             &self.hash,
             &self.audio.count,
             &self.subs.count
-        )
+        ))
     }
 }

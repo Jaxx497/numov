@@ -2,10 +2,10 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
-use serde::Serialize;
+// use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum AudioCodec {
     AAC,

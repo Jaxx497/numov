@@ -460,7 +460,6 @@ dependencies = [
  "regex",
  "rusqlite",
  "select",
- "serde",
  "strsim",
  "ureq",
  "walkdir",

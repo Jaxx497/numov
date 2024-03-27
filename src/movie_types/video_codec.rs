@@ -2,10 +2,10 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
-use serde::Serialize;
+// use serde::Serialize;
 use std::fmt;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum VideoCodec {
     x264,
