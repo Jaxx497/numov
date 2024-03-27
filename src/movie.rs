@@ -267,3 +267,30 @@ impl Display for Movie {
         )
     }
 }
+
+impl Movie {
+    pub fn make_lines(&self) -> String {
+        let rating = match self.rating.as_ref() {
+            Some(s) => s.as_str(),
+            _ => "",
+        };
+
+        format!(
+            "{},{},{},{},{:.2},{},{},{},{},{},{},{:x},{},{}",
+            &self.title.replace(',', ""),
+            &self.year,
+            rating,
+            &self.duration,
+            &self.size,
+            &self.video.resolution.to_string(),
+            &self.video.codec,
+            &self.video.bit_depth.to_string(),
+            &self.audio.codec.to_string(),
+            &self.audio.channels,
+            &self.subs.format,
+            &self.hash,
+            &self.audio.count,
+            &self.subs.count
+        )
+    }
+}

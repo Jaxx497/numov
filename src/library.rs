@@ -192,48 +192,59 @@ impl Library {
     /// Considering rebuiding this function once movie
     /// attributes are made private
     pub fn output_to_csv(&self) {
-        let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
-        let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
+        let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
+                + self
+                    .collection
+                    .values()
+                    .map(|m| m.make_lines())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .as_str();
 
-        wtr.serialize([
-            "Title",
-            "Year",
-            "Rating",
-            "Duration",
-            "Size",
-            "Resolution",
-            "V_Coec",
-            "Bit_depth",
-            "A_Codec",
-            "Channels",
-            "Sub_Format",
-            "Hash",
-            "Audio #",
-            "Sub #",
-        ])
-        .ok();
+        std::fs::write("m_log.csv", output_str).unwrap_or_else(|e| println!("{e}"));
 
-        self.collection.values().for_each(|m| {
-            wtr.serialize((
-                &m.title,
-                &m.year,
-                &m.rating,
-                &m.duration,
-                format!("{:.2}", m.size),
-                &m.video.resolution.to_string(),
-                &m.video.codec,
-                &m.video.bit_depth.to_string(),
-                &m.audio.codec.to_string(),
-                &m.audio.channels,
-                &m.subs.format,
-                format!("{:x}", &m.hash),
-                &m.audio.count,
-                &m.subs.count,
-            ))
-            .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
-            csv_prog.inc();
-        });
-        csv_prog.end();
+        // let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
+        // let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
+        //
+        // wtr.serialize([
+        //     "Title",
+        //     "Year",
+        //     "Rating",
+        //     "Duration",
+        //     "Size",
+        //     "Resolution",
+        //     "V_Coec",
+        //     "Bit_depth",
+        //     "A_Codec",
+        //     "Channels",
+        //     "Sub_Format",
+        //     "Hash",
+        //     "Audio #",
+        //     "Sub #",
+        // ])
+        // .ok();
+        //
+        // self.collection.values().for_each(|m| {
+        //     wtr.serialize((
+        //         &m.title,
+        //         &m.year,
+        //         &m.rating,
+        //         &m.duration,
+        //         format!("{:.2}", m.size),
+        //         &m.video.resolution.to_string(),
+        //         &m.video.codec,
+        //         &m.video.bit_depth.to_string(),
+        //         &m.audio.codec.to_string(),
+        //         &m.audio.channels,
+        //         &m.subs.format,
+        //         format!("{:x}", &m.hash),
+        //         &m.audio.count,
+        //         &m.subs.count,
+        //     ))
+        //     .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
+        //     csv_prog.inc();
+        // });
+        // csv_prog.end();
     }
 
     /// Renames folders based on format determined in get_new_name()
@@ -243,10 +254,9 @@ impl Library {
         for path in &Self::_get_dirs(&self.root) {
             let hash = Movie::read_metadata(path).1;
 
-            if let Some(m) = self.collection.get(&hash) {
+            if let Some(mov) = self.collection.get(&hash) {
                 let old_name = path.parent().unwrap();
-                let new_name = self.get_new_name(m);
-                let file_name = path.file_name().unwrap();
+                let new_name = self.get_new_name(mov);
 
                 if new_name != old_name {
                     old_hashes.insert(hash);
@@ -256,6 +266,7 @@ impl Library {
                         println!("Error writing to {:?}\nError: {e}", &new_name)
                     });
 
+                    let file_name = path.file_name().unwrap();
                     let new_path = &new_name.join(file_name);
                     let new_hash = Movie::read_metadata(new_path).1;
                     m.hash = new_hash;
