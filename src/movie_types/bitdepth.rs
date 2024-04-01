@@ -2,7 +2,6 @@ use rusqlite::{
     types::{FromSql, FromSqlResult, ValueRef},
     Result as RusqliteResult, ToSql,
 };
-// use serde::Serialize;
 use std::fmt;
 
 #[derive(Debug)]
@@ -17,7 +16,7 @@ impl ToSql for BitDepth {
         Ok(match self {
             BitDepth::Bit10 => "10bit".into(),
             BitDepth::Bit8 => "8bit".into(),
-            BitDepth::Other(s) => format!("{}bit", s).into(),
+            BitDepth::Other(bit) => format!("{}bit", bit).into(),
         })
     }
 }
@@ -43,11 +42,11 @@ impl From<&i8> for BitDepth {
 }
 
 impl From<&str> for BitDepth {
-    fn from(s: &str) -> Self {
-        match s {
+    fn from(bit: &str) -> Self {
+        match bit {
             "10bit" => BitDepth::Bit10,
             "8bit" => BitDepth::Bit8,
-            i => BitDepth::Other(i.parse::<i8>().unwrap()),
+            i => BitDepth::Other(i.parse::<i8>().unwrap_or(0)),
         }
     }
 }

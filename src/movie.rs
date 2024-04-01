@@ -185,7 +185,7 @@ impl Movie {
     fn get_video_stream(track: &Track) -> VideoStream {
         let codec = VideoCodec::from(track.codec_id.as_str());
         let bit_depth = match codec {
-            VideoCodec::x265 => BitDepth::Bit10,
+            VideoCodec::x265 | VideoCodec::AV1 => BitDepth::Bit10,
             VideoCodec::x264 => BitDepth::Bit8,
             VideoCodec::Other(ref s) if s == "VP9" => BitDepth::Bit10,
             _ => BitDepth::Other(0),
@@ -279,8 +279,8 @@ impl Movie {
         };
 
         Cow::from(format!(
-            "{},{},{},{},{:.2},{},{},{},{},{},{},{:x},{},{}",
-            &self.title.replace(',', ""),
+            "\"{}\",{},{},{},{:.2},{},{},{},{},{},{},{:x},{},{}",
+            &self.title,
             &self.year,
             rating,
             &self.duration,

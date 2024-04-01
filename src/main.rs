@@ -6,8 +6,7 @@ mod movie_types;
 use clap::Parser;
 use clap::ValueEnum;
 use library::Library;
-use std::io;
-use std::io::Write;
+use std::io::{self, Write};
 use std::{path::PathBuf, time::Instant};
 
 fn main() {
