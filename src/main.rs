@@ -4,7 +4,6 @@ mod movie;
 mod movie_types;
 
 use clap::Parser;
-use clap::ValueEnum;
 use library::Library;
 use std::io::{self, Write};
 use std::{path::PathBuf, time::Instant};
@@ -28,12 +27,12 @@ fn main() {
 
     let mut lib = Library::new(PathBuf::new());
 
-    if let Some(user) = args.lb_username {
+    if let Some(user) = &args.lb_username {
         lib.update_ratings(&user)
             .unwrap_or_else(|e| println!("Error parsing ratings: {e}"));
     }
 
-    match args.path {
+    match &args.path {
         Some(root) if PathBuf::from(&root).is_dir() => {
             lib.root = PathBuf::from(&root)
                 .canonicalize()
@@ -51,10 +50,11 @@ fn main() {
         lib.output_to_csv();
     }
 
-    if let Some(df_arg) = args.df {
-        lib.handle_dataframe(&df_arg)
+    if let Some(df_arg) = &args.dataframe {
+        lib.handle_dataframe(df_arg)
             .unwrap_or_else(|e| println!("Error creating dataframe: {e}"));
     }
+
     // Getting library to close from within the library crate
     // has proven to be very difficult
     lib.db
@@ -84,27 +84,12 @@ struct Args {
     #[arg(short = 'C', long, action = clap::ArgAction::SetTrue)]
     csv: bool,
 
-    /// Output movie data as a dataframe: options: [audio, audio ch, subs]
-    #[arg(short = 'D', long = "dataframe")]
-    df: Option<String>,
-
+    /// Output movie data as a dataframe
+    // #[arg(short = 'D', long, default_value = "all")]
+    #[arg(short = 'D', long)]
+    dataframe: Option<String>,
+    //
     /// Reset database
     #[arg(long, action = clap::ArgAction::SetTrue)]
     reset: bool,
 }
-
-// #[derive(Clone, Debug, ValueEnum)]
-// enum Output {
-//     Csv,
-//     Json,
-//     Df,
-// }
-//
-// #[derive(Clone, Debug, ValueEnum)]
-// enum Update {
-//     M,
-//     Movies,
-//     R,
-//     Ratings,
-//     All,
-// }

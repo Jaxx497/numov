@@ -197,12 +197,7 @@ impl Library {
     // TODO - Consider reimplementing with the csv crate
     pub fn output_to_csv(&self) {
         let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
-                + self
-                    .collection
-                    .values()
-                    .map(|m| m.make_lines())
-                    .collect::<Vec<_>>()
-                    .join("\n").as_str();
+                + self._get_lib_str().as_str();
 
         std::fs::write("m_log.csv", output_str).unwrap_or_else(|e| println!("{e}"));
     }
@@ -280,13 +275,7 @@ impl Library {
 
         let output_str = "Title,Year,Stars,Dur,Size,Res,Vodec,Bits,Codec,Ch,Fmt,Hash,A#,S#\n"
             .to_string()
-            + self
-                .collection
-                .values()
-                .map(|m| m.make_lines())
-                .collect::<Vec<_>>()
-                .join("\n")
-                .as_str();
+            + self._get_lib_str().as_str();
 
         let cursor = std::io::Cursor::new(output_str);
 
@@ -330,6 +319,14 @@ impl Library {
         println!("{:?}", df);
 
         Ok(())
+    }
+
+    fn _get_lib_str(&self) -> String {
+        self.collection
+            .values()
+            .map(|m| m.make_lines())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
