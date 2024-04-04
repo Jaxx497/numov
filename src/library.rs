@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use crate::{database::Database, movie::Movie};
+use polars::prelude::*;
 use rusqlite::Result;
 use select::{
     document::Document,
@@ -7,6 +8,7 @@ use select::{
 };
 use std::{
     collections::{HashMap, HashSet},
+    env,
     io::Stdout,
     path::PathBuf,
     time::Instant,
@@ -195,12 +197,12 @@ impl Library {
     // TODO - Consider reimplementing with the csv crate
     pub fn output_to_csv(&self) {
         let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
-                + &self
+                + self
                     .collection
                     .values()
                     .map(|m| m.make_lines())
                     .collect::<Vec<_>>()
-                    .join("\n");
+                    .join("\n").as_str();
 
         std::fs::write("m_log.csv", output_str).unwrap_or_else(|e| println!("{e}"));
     }
@@ -266,6 +268,68 @@ impl Library {
             m.size
         );
         PathBuf::from(&self.root).join(new_path)
+    }
+
+    pub fn handle_dataframe(&self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
+        env::set_var("POLARS_FMT_TABLE_FORMATTING", "UTF8_BORDERS_ONLY");
+        env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
+        env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
+        env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
+        env::set_var("POLARS_FMT_MAX_ROWS", "25");
+        env::set_var("POLARS_FMT_STR_LEN", "35");
+
+        let output_str = "Title,Year,Stars,Dur,Size,Res,Vodec,Bits,Codec,Ch,Fmt,Hash,A#,S#\n"
+            .to_string()
+            + self
+                .collection
+                .values()
+                .map(|m| m.make_lines())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .as_str();
+
+        let cursor = std::io::Cursor::new(output_str);
+
+        let raw_df = CsvReader::new(cursor)
+            .infer_schema(None)
+            .has_header(true)
+            .finish()?;
+
+        let df = match input.to_lowercase().trim() {
+            "all" | "full" => {
+                env::set_var("POLARS_FMT_STR_LEN", "25");
+                env::set_var("POLARS_FMT_MAX_COLS", "10");
+                env::set_var("POLARS_FMT_MAX_ROWS", "-1");
+                raw_df
+                    .select([
+                        "Year", "Title", "Stars", "Dur", "Size", "Res", "Bits", "Codec", "Ch",
+                        "Fmt",
+                    ])?
+                    .sort(["Title"], false, false)?
+            }
+            "year" => raw_df
+                .select(["Title", "Year"])?
+                .sort(["Year"], false, false)?
+                .head(Some(25)),
+            "audio" => raw_df
+                .select(["A#", "Title", "Stars", "Codec", "Ch"])?
+                .sort(["A#", "Title"], vec![true, false], false)?
+                .head(Some(25)),
+            "audio_ch" | "audio ch" => raw_df
+                .select(["Ch", "Title", "Stars", "Codec"])?
+                .sort(["Ch", "Title"], vec![false, false], false)?
+                .head(Some(25)),
+            "sub" | "subs" => raw_df
+                .select(["S#", "Title", "Stars", "Fmt"])?
+                .sort(["S#", "Title"], vec![true, false], false)?
+                .head(Some(25)),
+            _ => raw_df,
+        };
+        // .slice(0, 20);
+
+        println!("{:?}", df);
+
+        Ok(())
     }
 }
 

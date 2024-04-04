@@ -272,7 +272,7 @@ impl Display for Movie {
 }
 
 impl Movie {
-    pub fn make_lines(&self) -> Cow<str> {
+    pub fn make_lines(&self) -> Cow<'_, str> {
         let rating = match self.rating.as_ref() {
             Some(s) => s.as_str(),
             _ => "",

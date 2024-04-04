@@ -51,6 +51,10 @@ fn main() {
         lib.output_to_csv();
     }
 
+    if let Some(df_arg) = args.df {
+        lib.handle_dataframe(&df_arg)
+            .unwrap_or_else(|e| println!("Error creating dataframe: {e}"));
+    }
     // Getting library to close from within the library crate
     // has proven to be very difficult
     lib.db
@@ -79,26 +83,28 @@ struct Args {
     /// Output movie data as a csv file
     #[arg(short = 'C', long, action = clap::ArgAction::SetTrue)]
     csv: bool,
+
+    /// Output movie data as a dataframe: options: [audio, audio ch, subs]
+    #[arg(short = 'D', long = "dataframe")]
+    df: Option<String>,
+
     /// Reset database
     #[arg(long, action = clap::ArgAction::SetTrue)]
     reset: bool,
-    // /// Output movie data as a dataframe
-    // #[arg(long = "df", action = clap::ArgAction::SetTrue)]
-    // df: bool,
 }
 
-#[derive(Clone, Debug, ValueEnum)]
-enum Output {
-    Csv,
-    Json,
-    Df,
-}
-
-#[derive(Clone, Debug, ValueEnum)]
-enum Update {
-    M,
-    Movies,
-    R,
-    Ratings,
-    All,
-}
+// #[derive(Clone, Debug, ValueEnum)]
+// enum Output {
+//     Csv,
+//     Json,
+//     Df,
+// }
+//
+// #[derive(Clone, Debug, ValueEnum)]
+// enum Update {
+//     M,
+//     Movies,
+//     R,
+//     Ratings,
+//     All,
+// }
