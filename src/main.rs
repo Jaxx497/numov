@@ -3,7 +3,7 @@ mod library;
 mod movie;
 mod movie_types;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use library::Library;
 use std::io::{self, Write};
 use std::{path::PathBuf, time::Instant};
@@ -50,9 +50,9 @@ fn main() {
         lib.output_to_csv();
     }
 
-    if let Some(df_arg) = &args.dataframe {
-        lib.handle_dataframe(df_arg)
-            .unwrap_or_else(|e| println!("Error creating dataframe: {e}"));
+    if let Some(x) = &args.dataframe {
+        lib.handle_dataframe(x.as_str())
+            .unwrap_or_else(|e| println!("Error creating dataframe: {e}"))
     }
 
     // Getting library to close from within the library crate
@@ -85,11 +85,32 @@ struct Args {
     csv: bool,
 
     /// Output movie data as a dataframe
-    // #[arg(short = 'D', long, default_value = "all")]
-    #[arg(short = 'D', long)]
-    dataframe: Option<String>,
+    #[arg(short = 'D', long, value_enum)]
+    dataframe: Option<DFOpts>,
     //
     /// Reset database
     #[arg(long, action = clap::ArgAction::SetTrue)]
     reset: bool,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, ValueEnum)]
+enum DFOpts {
+    audio,
+    channels,
+    full,
+    subs,
+    year,
+}
+
+impl DFOpts {
+    fn as_str(&self) -> &'static str {
+        match self {
+            DFOpts::audio => "audio",
+            DFOpts::channels => "channels",
+            DFOpts::full => "full",
+            DFOpts::subs => "subs",
+            DFOpts::year => "year",
+        }
+    }
 }

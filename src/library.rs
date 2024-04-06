@@ -25,6 +25,8 @@ pub struct Library {
     ratings: HashMap<String, String>,
 }
 
+const DATAFRAME_LEN: usize = 20;
+
 impl Library {
     pub fn new(root: PathBuf) -> Self {
         let db = Database::open().unwrap_or_else(|e| {
@@ -284,8 +286,8 @@ impl Library {
             .has_header(true)
             .finish()?;
 
-        let df = match input.to_lowercase().trim() {
-            "all" | "full" => {
+        let mut df = match input {
+            "full" => {
                 env::set_var("POLARS_FMT_STR_LEN", "25");
                 env::set_var("POLARS_FMT_MAX_COLS", "10");
                 env::set_var("POLARS_FMT_MAX_ROWS", "-1");
@@ -296,25 +298,28 @@ impl Library {
                     ])?
                     .sort(["Title"], false, false)?
             }
-            "year" => raw_df
-                .select(["Title", "Year"])?
-                .sort(["Year"], false, false)?
-                .head(Some(25)),
             "audio" => raw_df
                 .select(["A#", "Title", "Stars", "Codec", "Ch"])?
-                .sort(["A#", "Title"], vec![true, false], false)?
-                .head(Some(25)),
-            "audio_ch" | "audio ch" | "channels" => raw_df
-                .select(["Ch", "Title", "Stars", "Codec"])?
-                .sort(["Ch", "Title"], vec![false, false], false)?
-                .head(Some(25)),
-            "sub" | "subs" => raw_df
-                .select(["S#", "Title", "Stars", "Fmt"])?
-                .sort(["S#", "Title"], vec![true, false], false)?
-                .head(Some(25)),
+                .sort(["A#", "Title"], vec![true, false], false)?,
+            "channels" => raw_df.select(["Ch", "Title", "Stars", "Codec"])?.sort(
+                ["Ch", "Title"],
+                vec![false, false],
+                false,
+            )?,
+            "subs" => raw_df.select(["S#", "Title", "Stars", "Fmt"])?.sort(
+                ["S#", "Title"],
+                vec![true, false],
+                false,
+            )?,
+            "year" => raw_df
+                .select(["Title", "Year"])?
+                .sort(["Year"], false, false)?,
             _ => raw_df,
         };
-        // .slice(0, 20);
+
+        if input != "full" {
+            df = df.slice(0, DATAFRAME_LEN);
+        }
 
         println!("{:?}", df);
 
@@ -322,11 +327,14 @@ impl Library {
     }
 
     fn _get_lib_str(&self) -> String {
-        self.collection
+        let mut str_vec = self
+            .collection
             .values()
             .map(|m| m.make_lines())
-            .collect::<Vec<_>>()
-            .join("\n")
+            .collect::<Vec<_>>();
+
+        str_vec.sort();
+        str_vec.join("\n")
     }
 }
 

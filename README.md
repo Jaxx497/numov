@@ -21,7 +21,7 @@ Each subdirectory must follow this naming convention `movie title here (year)` i
 - `--reset` will remove existing numov database
 
 #### Letterboxd functionality
-- `-L <letterboxd username>` users can map the ratings of any **non-private** letterboxd user.
+- `-L, --letterboxd <LB username>` users can map the ratings of any **non-private** letterboxd user.
 
 #### Example command:
 `numov -P path/to/root -L deathproof --csv --rename`

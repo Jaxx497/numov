@@ -1,6 +1,9 @@
-use crate::movie_types::{
-    audio_codec::AudioCodec, bitdepth::BitDepth, resolution::Resolution,
-    sub_format::SubtitleFormat, video_codec::VideoCodec,
+use crate::{
+    movie_types::{
+        audio_codec::AudioCodec, bitdepth::BitDepth, resolution::Resolution,
+        sub_format::SubtitleFormat, video_codec::VideoCodec,
+    },
+    YEYE,
 };
 use core::time::Duration;
 use lazy_static::lazy_static;
