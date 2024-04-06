@@ -304,7 +304,7 @@ impl Library {
                 .select(["A#", "Title", "Stars", "Codec", "Ch"])?
                 .sort(["A#", "Title"], vec![true, false], false)?
                 .head(Some(25)),
-            "audio_ch" | "audio ch" => raw_df
+            "audio_ch" | "audio ch" | "channels" => raw_df
                 .select(["Ch", "Title", "Stars", "Codec"])?
                 .sort(["Ch", "Title"], vec![false, false], false)?
                 .head(Some(25)),
