@@ -57,12 +57,7 @@ impl Library {
     //  Generate hash, and try to remove it from hashet
     //  If it cannot be removed:
     //      Create a new movie instance, and add it to collection
-    pub fn update_movies(&mut self) -> Result<()> {
-        if !PathBuf::from(&self.root).is_dir() {
-            println!("Improper path provided.");
-            return Ok(());
-        }
-
+    pub fn update_movies(&mut self) {
         let mut logger = Logger::new();
         let path_list = Self::_get_dirs(&self.root);
 
@@ -100,8 +95,6 @@ impl Library {
                 .unwrap_or_else(|e| println!("Failed to update the database.\nError: {e}"));
             logger.output();
         }
-
-        Ok(())
     }
 
     /// Given a `user_name` (String) from letterboxd, scrape ratings and store in database

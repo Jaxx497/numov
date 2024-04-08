@@ -39,12 +39,12 @@ fn main() {
                 .canonicalize()
                 .unwrap_or_else(|_| PathBuf::from(&root));
 
-            lib.update_movies().ok();
+            lib.update_movies();
             if args.rename {
                 lib.rename_folders();
             }
         }
-        _ => (),
+        _ => println!("Invalid path provided."),
     };
 
     if args.csv {

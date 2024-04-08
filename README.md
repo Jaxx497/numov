@@ -1,4 +1,4 @@
-# Numov 0.1.1
+# Numov 0.1.2
 #### A simple CLI program which helps organize and manage libraries of matroska files!
 
 In order to use this program, files must be organized in the following structure:
@@ -16,7 +16,8 @@ Each subdirectory must follow this naming convention `movie title here (year)` i
 - `-P <path>` initializes and updates the database
 - `-C, --csv` outputs contents of database into csv file in cwd
 - `-R, --rename` bulk renames parent folders in a standard, readable fashion
-- `-D, --dataframe` outputs condensed dataframes of requested info
+    - Will rename files within directory provided with `-P <path>`
+- `-d, --dataframe` outputs condensed dataframes of requested info
      - possible values: [`subs`, `audio`, `channels`, `year`, `all`]
 - `--reset` will remove existing numov database
 

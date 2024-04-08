@@ -121,13 +121,7 @@ impl Movie {
     {
         let metadata_title = matroska.info.title.clone().unwrap_or_default();
 
-        let parent = path
-            .as_ref()
-            .parent()
-            .expect("Could not unwrap parent contents.")
-            .file_name()
-            .expect("Could not read parent folder name.")
-            .to_str()?;
+        let parent = path.as_ref().parent()?.file_name()?.to_str()?;
 
         Self::extract_title_year(metadata_title)
             .or_else(|| {
