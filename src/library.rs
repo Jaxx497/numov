@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::{database::Database, movie::Movie};
 use polars::prelude::*;
 use rusqlite::Result;
@@ -10,6 +9,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     io::Stdout,
+    iter::repeat,
     path::PathBuf,
     time::Instant,
     u32,
@@ -63,8 +63,7 @@ impl Library {
             return Ok(());
         }
 
-        // self.legacy_collection = self.collection.keys().cloned().collect();
-        let mut logger: HashMap<String, MovieStatus> = HashMap::new();
+        let mut logger = Logger::new();
         let path_list = Self::_get_dirs(&self.root);
 
         let mut main_prog = Prog::new(path_list.len(), "updated library");
@@ -72,33 +71,35 @@ impl Library {
             let hash = Movie::read_metadata(path).1;
             if !self.legacy_collection.remove(&hash) {
                 let movie = Movie::new(path);
-                logger.insert(
-                    format!("{} ({})", &movie.title, movie.year),
-                    MovieStatus::New,
-                );
+                logger
+                    .new
+                    .insert(format!("{} ({})", &movie.title, movie.year));
                 self.collection.insert(hash, movie);
             }
             main_prog.inc();
         }
         main_prog.end();
-
         self.map_ratings();
 
-        self.legacy_collection.iter().for_each(|bad_hash| {
-            if let Some(m) = self.collection.remove(bad_hash) {
-                logger
-                    .entry(format!("{} ({})", &m.title, m.year))
-                    .and_modify(|t| *t = MovieStatus::Updated)
-                    .or_insert(MovieStatus::Removed);
-            };
+        self.legacy_collection.iter().for_each(|leftover| {
+            if let Some(m) = self.collection.remove(leftover) {
+                let name = format!("{} ({})", &m.title, &m.year);
+                match logger.new.get(&name) {
+                    Some(_) => {
+                        logger.new.remove(&name);
+                        logger.updated.insert(name)
+                    }
+                    None => logger.removed.insert(name),
+                };
+            }
         });
 
         if !logger.is_empty() {
             self.db
                 .update_movie_table(&self.collection, &self.legacy_collection)
                 .unwrap_or_else(|e| println!("Failed to update the database.\nError: {e}"));
+            logger.output();
         }
-        Self::log_changes(logger);
 
         Ok(())
     }
@@ -125,7 +126,19 @@ impl Library {
     fn retrieve_ratings(user_name: impl AsRef<str>) -> HashMap<String, String> {
         let url = format! {"https://letterboxd.com/{}/films/", user_name.as_ref()};
         let mut catalogue = HashMap::new();
-        let doc = Self::get_document(&url);
+
+        let get_doc = |url: &str| -> Document {
+            Document::from(
+                ureq::get(url)
+                    .call()
+                    .expect("Failed to make request.")
+                    .into_string()
+                    .expect("Failed to convert response into string.")
+                    .as_str(),
+            )
+        };
+
+        let doc = get_doc(&url);
 
         let mut last_page = match doc.find(Class("paginate-pages")).into_selection().first() {
             Some(n) => n
@@ -143,23 +156,13 @@ impl Library {
         let mut lb_prog = Prog::new(last_page, "scraping user ratings");
         lb_prog.pb.show_counter = false;
         while last_page > 1 {
-            let doc = Self::get_document(&format!("{}/page/{}", url, last_page));
+            let doc = get_doc(&format!("{}/page/{}", url, last_page));
             Self::extract_info(&doc, &mut catalogue);
             last_page -= 1;
             lb_prog.inc();
         }
         lb_prog.end();
         catalogue
-    }
-
-    fn get_document(url: &str) -> Document {
-        let req = ureq::get(url)
-            .call()
-            .expect("Failed to make request.")
-            .into_string()
-            .expect("Failed to convert response to String.");
-
-        Document::from(req.as_str())
     }
 
     fn extract_info(doc: &Document, catalogue: &mut HashMap<String, String>) {
@@ -192,11 +195,6 @@ impl Library {
     /// Builds a csv file, with each row representing a movie
     /// and each column representing an aspect.
     /// Outputs to directory program was run from
-    ///
-    /// Considering rebuiding this function once movie
-    /// attributes are made private
-    //
-    // TODO - Consider reimplementing with the csv crate
     pub fn output_to_csv(&self) {
         let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
                 + self._get_lib_str().as_str();
@@ -268,13 +266,6 @@ impl Library {
     }
 
     pub fn handle_dataframe(&self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
-        env::set_var("POLARS_FMT_TABLE_FORMATTING", "UTF8_BORDERS_ONLY");
-        env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
-        env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
-        env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
-        env::set_var("POLARS_FMT_MAX_ROWS", "25");
-        env::set_var("POLARS_FMT_STR_LEN", "35");
-
         let output_str = "Title,Year,Stars,Dur,Size,Res,Vodec,Bits,Codec,Ch,Fmt,Hash,A#,S#\n"
             .to_string()
             + self._get_lib_str().as_str();
@@ -288,7 +279,7 @@ impl Library {
 
         let mut df = match input {
             "full" => {
-                env::set_var("POLARS_FMT_STR_LEN", "25");
+                env::set_var("POLARS_FMT_STR_LEN", "30");
                 env::set_var("POLARS_FMT_MAX_COLS", "10");
                 env::set_var("POLARS_FMT_MAX_ROWS", "-1");
                 raw_df
@@ -374,42 +365,6 @@ impl Library {
             println!("Successfully mapped ratings to {count} movies.")
         }
     }
-
-    fn log_changes(logger: HashMap<String, MovieStatus>) {
-        let mut log = vec![vec![], vec![], vec![]];
-        for (k, v) in logger {
-            match v {
-                MovieStatus::New => log[0].push(k),
-                MovieStatus::Updated => log[1].push(k),
-                MovieStatus::Removed => log[2].push(k),
-            }
-        }
-
-        if !log[0].is_empty() || !log[1].is_empty() || !log[2].is_empty() {
-            println!(
-                "\nADDED {} | UPDATED {} | REMOVED {}",
-                log[0].len(),
-                log[1].len(),
-                log[2].len()
-            );
-        }
-
-        for (i, m) in ["++", "**", "--"].into_iter().enumerate() {
-            if !log[i].is_empty() {
-                match log[i].len() {
-                    t if t < 15 => log[i].iter().for_each(|title| println!("\t{m} {title}")),
-                    _ => println!("\t{}", log[i].join("  |  ")),
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-enum MovieStatus {
-    New,
-    Removed,
-    Updated,
 }
 
 struct Prog {
@@ -442,51 +397,60 @@ impl Prog {
     }
 }
 
-// OLD CSV IMPLEMENTATION
-// Removed to cut down on external crates
-// impl Library {
-//     pub fn output_to_csv() {
-//         let mut wtr = csv::Writer::from_path("m_log.csv").unwrap();
-//         let mut csv_prog = Prog::new(self.collection.len(), "writing movies to csv");
-//
-//         wtr.serialize([
-//             "Title",
-//             "Year",
-//             "Rating",
-//             "Duration",
-//             "Size",
-//             "Resolution",
-//             "V_Coec",
-//             "Bit_depth",
-//             "A_Codec",
-//             "Channels",
-//             "Sub_Format",
-//             "Hash",
-//             "Audio #",
-//             "Sub #",
-//         ])
-//         .ok();
-//
-//         self.collection.values().for_each(|m| {
-//             wtr.serialize((
-//                 &m.title,
-//                 &m.year,
-//                 &m.rating,
-//                 &m.duration,
-//                 format!("{:.2}", m.size),
-//                 &m.video.resolution.to_string(),
-//                 &m.video.codec,
-//                 &m.video.bit_depth.to_string(),
-//                 &m.audio.codec.to_string(),
-//                 &m.audio.channels,
-//                 &m.subs.format,
-//                 format!("{:x}", &m.hash),
-//                 &m.audio.count,
-//                 &m.subs.count,
-//             ))
-//             .unwrap_or_else(|e| println!("Error writing {} to csv with error: {e}", m.title));
-//             csv_prog.inc();
-//         });
-//         csv_prog.end();
-//     }
-// }
+struct Logger {
+    new: HashSet<String>,
+    removed: HashSet<String>,
+    updated: HashSet<String>,
+}
+
+impl Logger {
+    pub fn new() -> Self {
+        Logger {
+            new: HashSet::new(),
+            removed: HashSet::new(),
+            updated: HashSet::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.new.is_empty() && self.removed.is_empty() && self.updated.is_empty()
+    }
+
+    fn output(self) {
+        let max_len = *[self.new.len(), self.removed.len(), self.updated.len()]
+            .iter()
+            .max()
+            .unwrap();
+
+        let hashsets = [
+            ("New", self.new),
+            ("Removed", self.removed),
+            ("Updated", self.updated),
+        ];
+
+        let output_vec = hashsets
+            .into_iter()
+            .filter_map(|this_set| {
+                if this_set.1.is_empty() {
+                    return None;
+                }
+                let this_len = this_set.1.len();
+                let mut vec = this_set.1.into_iter().collect::<Vec<_>>();
+                vec.sort();
+                vec.extend(repeat("".to_string()).take(max_len.saturating_sub(this_len)));
+
+                Some(Series::new(&format!("{} ({})", this_set.0, this_len), vec))
+            })
+            .collect();
+
+        let df = match DataFrame::new(output_vec) {
+            Ok(df) => df,
+            Err(e) => {
+                println!("Could not create dataframe for updated values.\nError: {e}");
+                return;
+            }
+        };
+
+        println!("{:?}", df);
+    }
+}

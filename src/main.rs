@@ -6,10 +6,11 @@ mod movie_types;
 use clap::{Parser, ValueEnum};
 use library::Library;
 use std::io::{self, Write};
-use std::{path::PathBuf, time::Instant};
+use std::{env, path::PathBuf, time::Instant};
 
 fn main() {
     let t1 = Instant::now();
+    set_env();
     let args = Args::parse();
 
     if args.reset {
@@ -91,6 +92,15 @@ struct Args {
     /// Reset database
     #[arg(long, action = clap::ArgAction::SetTrue)]
     reset: bool,
+}
+
+fn set_env() {
+    env::set_var("POLARS_FMT_TABLE_FORMATTING", "UTF8_BORDERS_ONLY");
+    env::set_var("POLARS_FMT_TABLE_HIDE_DATAFRAME_SHAPE_INFORMATION", "1");
+    env::set_var("POLARS_FMT_TABLE_ROUNDED_CORNERS", "1");
+    env::set_var("POLARS_FMT_TABLE_HIDE_COLUMN_DATA_TYPES", "1");
+    env::set_var("POLARS_FMT_MAX_ROWS", "25");
+    env::set_var("POLARS_FMT_STR_LEN", "35");
 }
 
 #[allow(non_camel_case_types)]
