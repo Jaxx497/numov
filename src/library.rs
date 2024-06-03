@@ -340,7 +340,7 @@ impl Library {
     fn map_ratings(&mut self) {
         let mut count = 0;
         for movie in self.collection.values_mut() {
-            let mut best_match = (0.8, None);
+            let mut best_match = (0.88, None);
 
             for (rating_title, rating_value) in &self.ratings {
                 let similarity = strsim::jaro_winkler(&movie.title, rating_title);
@@ -349,7 +349,7 @@ impl Library {
                     best_match = (similarity, Some(rating_value.clone()))
                 }
             }
-            if best_match.0 > 0.84 {
+            if best_match.0 > 0.9 {
                 movie.rating = best_match.1;
                 count += 1;
             }
