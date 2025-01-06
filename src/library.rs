@@ -192,9 +192,11 @@ impl Library {
         let output_str = "Title,Year,Rating,Duration,Size,Resolution,V_Codec,Bit_depth,A_Codec,Channels,Sub_Format,Hash,Audio #,Sub #\n".to_string()
                 + self._get_lib_str().as_str();
 
-        std::fs::write("m_log.csv", output_str).unwrap_or_else(|e| println!("{e}"));
+        match std::fs::write("m_log.csv", output_str) {
+            Ok(_) => println!("Successfully wrote data to ./m_log.csv"),
+            Err(e) => eprintln!("{e}"),
+        }
     }
-
     /// Renames folders based on format determined in get_new_name()
     pub fn rename_folders(&mut self) {
         let mut old_hashes = HashSet::new();

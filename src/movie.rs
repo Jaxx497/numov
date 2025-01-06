@@ -3,24 +3,21 @@ use crate::movie_types::{
     sub_format::SubtitleFormat, video_codec::VideoCodec,
 };
 use core::time::Duration;
-use lazy_static::lazy_static;
 use matroska::{
     self, Matroska,
     Settings::{Audio, Video},
     Track, Tracktype,
 };
 use regex::Regex;
-// use serde::Serialize;
-use std::path::Path;
 use std::{
     borrow::Cow,
     fmt::{Display, Formatter, Result},
 };
+use std::{path::Path, sync::LazyLock};
 use xxhash_rust::const_xxh32::xxh32;
 
-lazy_static! {
-    static ref RE: Regex = Regex::new(r"(?P<title>.*) \((?P<year>\d{4})\)").unwrap();
-}
+static RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?P<title>.*) \((?P<year>\d{4})\)").unwrap());
 
 #[derive(Debug)]
 pub struct VideoStream {
